@@ -16,6 +16,8 @@
 #include "SPI.h"
 #include "TFT_eSPI.h"
 
+#include "globals.h"
+
 #define GFXFF 1
 #include "verdanab18.h"
 #define VERD18 &verdanab18

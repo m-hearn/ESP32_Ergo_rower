@@ -280,7 +280,7 @@ void calc_rower_stroke() {
   ************************************************/
 
   current_dt = (t_now - t_last)/1000.0;
-  if (current_dt = 0) return;
+  if (current_dt == 0) return;
 
   // save last
   omega_vector[3] = omega_vector[2];
@@ -475,8 +475,10 @@ Y88b 888 Y8b.     Y88b.    888  888 Y88b 888
     if (force > force_max) force_max = force;
     if (force > force_graph_maxy) force = force_graph_maxy;
     stroke_t+=current_dt;
-    force_graph[++force_ptr][0]=stroke_t;
-    force_graph[  force_ptr][1]=force;
+    if (++force_ptr < FORCE_BUF) {
+      force_graph[force_ptr][0]=stroke_t;
+      force_graph[force_ptr][1]=force;
+    }
   }
   
   /*********************************************************
@@ -491,9 +493,9 @@ Y88b 888 Y8b.     Y88b.    888  888 Y88b 888
   t_last = t_now;
 
   if (!DEBUG) {
-    printf("%ld,%d,%.3f,%4.3f,%d,%.0f,%.0f,%.0f,%4.3f,%5.5f,%2.0f,%.0f,%.0f,%.1f\n"
-      , t_now,stroke, stroke_t,current_dt
-      , power_stroke_screen[0]*9
+    printf("%6ld,%4d,%4.3f,%4.3f,%d,%3.0f,% 5.0f,% 5.0f,%4.3f,%5.5f,%2.0f,%3.0f,%4.0f,%3.0f\n"
+      ,    t_now,stroke, stroke_t,current_dt
+      ,                          power_stroke_screen[0]*9
       , omega_vector[0], Wd_v[0], omega_dot_dot
       , cal_factor
       ,K_damp //, K_damp_estimator);
@@ -507,17 +509,41 @@ Y88b 888 Y8b.     Y88b.    888  888 Y88b 888
 #ifndef ARDUINO
 int main() {
   int ind = 1;
+  unsigned long t_clock;
 
   setup_rower();
-  printf("T,S#,St,dt,R,W,Wd,Wdd,C,damp,SPM,Watts,D,force\n"); 
 
-  t_now = erg_sim2[0];
+  printf("     T,  S#,   St,   dt,R,  W,   Wd,  Wdd,    C,   damp,SM,  W,   D, Kg\n"); 
+
+  t_last = erg_sim2[0];
+  t_now  = t_last;
+  t_clock = t_now;
   start_rower();
 
   while (t_now <= 888888) {
-    t_last = t_now;
     t_now = erg_sim2[ind++];
     calc_rower_stroke();
+
+
+    if (rowing && !paused) {
+      // 27 2:14 2:13 252   230 0:01:01.1
+      //  123456789012345678901234567890
+      if ((t_real - t_clock) Seconds > 0.1) {
+        row_elaspsed+=0.1;
+        row_secs    +=0.1;
+
+        if (row_secs >= 60) {
+          stats_disp[27]='X'; // make the display think that drawing a : is necessary - because it's different
+          row_secs-=60.0;
+          if (++row_minutes > 60) {
+            stats_disp[24]='X';
+            row_hours++;
+            row_minutes -= 60;
+            if (row_hours > 9) row_hours = 0;
+          }
+        }
+      }
+    }
   }
 }
 #endif

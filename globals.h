@@ -72,11 +72,12 @@ double power_ratio_vector[MAX_N];
 double K_damp_estimator_vector[MAX_N];
 double speed_vector[MAX_N];
 
+#define FORCE_BUF 30
 static int  stroke = 0;
 static double  stroke_t = 0;
 volatile int    force_line;
 volatile int    force_ptr;
-volatile double force_graph[30][2];
+volatile double force_graph[FORCE_BUF][2];
 
 static int draw_force_x = 50;
 static int draw_force_y = 465;
@@ -99,6 +100,9 @@ static int asplit_secs;
 static int DEBUG = 0;
 static int rowing =0;
 static int paused = 0;
+
+#define DISPLAY_CPU 0
+#define ROWER_CPU 1
 
 #define GLOBALS
 

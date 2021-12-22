@@ -23,8 +23,6 @@
 #include "SPI.h"
 #include "TFT_eSPI.h"
 
-#define DISPLAY_CPU 0
-#define ROWER_CPU 1
 
 void setup_rower();
 void calc_rower_stroke();
@@ -220,9 +218,7 @@ void loop(void) {
 
   delay(10);
 
-  
-
-  if ((t_real - t_power) Seconds > 15) { paused = rowing;}  // can't be paused and rowing!
+  if ((t_real - t_power) Seconds > 5) { paused = rowing;}  // can't be paused and rowing!
 
   if (rowing && !paused) {
     // 27 2:14 2:13 252   230 0:01:01.1
