@@ -172,7 +172,7 @@ void setup() {
   DEBUG = !(digitalRead(DEBUG_PIN));
 #endif
 
-  Serial.begin(115200);
+  Serial.begin(250000);
   while (!Serial);
 
   DEBUG= !(digitalRead(DEBUG_PIN));
@@ -184,7 +184,7 @@ void setup() {
   
   // xTaskCreatePinnedToCore(setup_time, "time", 1000, NULL, 0, &Time_t_handle, DISPLAY_CPU);
 
-  setup_display();
+  //setup_display();
 
   setup_rower();
 }
@@ -195,9 +195,9 @@ int debug_index = 0;
 void loop(void) {
   t_real = millis();
 
-  if ((DEBUG) && (t_real >= erg_sim2[debug_index])) {
+  if ((DEBUG) && (t_real >= erg_sim[debug_index])) {
     row_buff_head = (row_buff_head+1)&ROW_BUFF_SIZE;
-    row_buffer[row_buff_head] = erg_sim2[debug_index++];
+    row_buffer[row_buff_head] = erg_sim[debug_index++];
   }
 
   while (row_buff_head != row_buff_tail) {
