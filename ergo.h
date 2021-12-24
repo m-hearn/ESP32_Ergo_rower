@@ -69,70 +69,25 @@ static int    force_maxh;
 //  ##  ##   ###    ##    ##       ##    ##  ##    ##  ##     ## ##           ##    
 // #### ##    ##    ##    ######## ##     ## ##     ##  #######  ##           ##   
 
-
-// void setup() {
-//   pinMode(22, INPUT);
-
-
-//     value = (REG_READ(GPIO_IN_REG) & 22);
-
-
-// volatile int interruptCounter;
-// int totalInterruptCounter;
- 
-// hw_timer_t * timer = NULL;
-// portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
- 
-// void IRAM_ATTR onTimer() {
-//   portENTER_CRITICAL_ISR(&timerMux);
-//   interruptCounter++;
-//   portEXIT_CRITICAL_ISR(&timerMux);
- 
-// }
- 
-// void setup() {
- 
-//   Serial.begin(115200);
- 
-//   timer = timerBegin(0, 80, true);
-//   timerAttachInterrupt(timer, &onTimer, true);
-//   timerAlarmWrite(timer, 1000000, true);
-//   timerAlarmEnable(timer);
- 
-// }
- 
-// void loop() {
- 
-//   if (interruptCounter > 0) {
- 
-//     portENTER_CRITICAL(&timerMux);
-//     interruptCounter--;
-//     portEXIT_CRITICAL(&timerMux);
- 
-//     totalInterruptCounter++;
- 
-//     Serial.print("An interrupt as occurred. Total number: ");
-//     Serial.println(totalInterruptCounter);
- 
-//   }
-// }
-
+#define RADSperTICK 2*PI/6
 
 #ifdef ARDUINO
 unsigned long last_interrupt;
-volatile int interrupt_count = 0;
+// volatile int interrupt_count = 0;
 
 #define DEBOUNCE_INT 5
 void IRAM_ATTR Interrupt_pin_rower()
 {
   unsigned long now = millis();
-  interrupt_count++;
+  // interrupt_count++;
 
-  if ((interrupt_count > 1) && (now - last_interrupt > DEBOUNCE_INT)) {
+  if (
+    // (interrupt_count > 1) && 
+    (now - last_interrupt > DEBOUNCE_INT)) {
     row_buff_head = (row_buff_head+1)&ROW_BUFF_SIZE;
     row_buffer[row_buff_head] = now;
     last_interrupt = now;
-    interrupt_count = 0;
+    // interrupt_count = 0;
   }
 };
 
@@ -150,7 +105,7 @@ void IRAM_ATTR Interrupt_pin_rower()
 void setup_rower(){
 
 #ifdef ARDUINO
-  pinMode(ROWER_PIN, INPUT_PULLUP);
+  pinMode(ROWER_PIN, INPUT);
 #endif
 
   row_buff_head = 0;
@@ -225,7 +180,7 @@ void start_rower(){
   // reset to default
  	K_damp = J_moment*d_omega_div_omega2; //= 0.0005 Nms^2 
 
-	cal_factor = PI*pow((K_damp/magic_factor), 1.0/3.0); // *(2.0/2.0)      distance per rev = 0.3532
+	cal_factor = RADSperTICK*pow((K_damp/magic_factor), 1.0/3.0); //      distance per rev = 0.3532
 
   t_stroke = t_last;
   t_power = t_last;
@@ -280,7 +235,7 @@ void calc_rower_stroke() {
   ************************************************/
 
   current_dt = (t_now - t_last)/1000.0;
-  if (current_dt == 0) return;
+  if (0 == current_dt) return; // also avoids DIV by 0 -- otherwise use /(current_dt+DELTA)
 
   // save last
   omega_vector[3] = omega_vector[2];
@@ -294,16 +249,16 @@ void calc_rower_stroke() {
   Wdd1 = omega_dot_dot;    
 
   // calc W and Wd
-  omega_vector[0] = (PI/(current_dt+DELTA) + omega_vector[1] + omega_vector[2] + omega_vector[3]) / 4.0;   //omega_vector is rad/s  2*pi rad per rev - 3 of 6 ticks.
-  Wd_v[0] = ((omega_vector[0] - omega_vector[1])/(current_dt+DELTA)  + Wd_v[1] + Wd_v[2] + Wd_v[3]) / 4.0;  // omega dot is this speed - last speed / time interval
+  omega_vector[0] = (RADSperTICK/(current_dt) + omega_vector[1] + omega_vector[2] + omega_vector[3]) / 4.0;   //omega_vector is rad/s  2*pi rad per rev - 3 of 6 ticks.
+  Wd_v[0] = ((omega_vector[0] - omega_vector[1])/(current_dt)  + Wd_v[1] + Wd_v[2] + Wd_v[3]) / 4.0;  // omega dot is this speed - last speed / time interval
   
   // if jerk (Wdd) is really high - guess that we got 2 of 2 interrupts instead of 2 of 3.  so pi*2*2/6 instead of pi*2*3/6
-  if ((Wd_v[0] - Wd_v[1])/(current_dt+DELTA) > 1000) {
-    current_dt = current_dt*1.5;
-    omega_vector[0] = (PI/current_dt + omega_vector[1] + omega_vector[2] + omega_vector[3]) / 4.0;   //omega_vector is rad/s  2*pi rad per rev - 3 of 6 ticks.
-    Wd_v[0] = ((omega_vector[0] - omega_vector[1])/(current_dt+DELTA)  + Wd_v[1] + Wd_v[2] + Wd_v[3]) / 4.0;  // omega dot is this speed - last speed / time interval
-  }
-  omega_dot_dot = ((Wd_v[0] - Wd_v[1])/(current_dt+DELTA) + Wdd1 +Wdd2+Wdd3) / 4.0;   // omega dot dot is   this dot - last do / time interval
+  // if ((Wd_v[0] - Wd_v[1])/(current_dt+DELTA) > 1000) {
+  //   current_dt = current_dt*1.5;
+  //   omega_vector[0] = (PI/current_dt + omega_vector[1] + omega_vector[2] + omega_vector[3]) / 4.0;   //omega_vector is rad/s  2*pi rad per rev - 3 of 6 ticks.
+  //   Wd_v[0] = ((omega_vector[0] - omega_vector[1])/(current_dt+DELTA)  + Wd_v[1] + Wd_v[2] + Wd_v[3]) / 4.0;  // omega dot is this speed - last speed / time interval
+  // }
+  omega_dot_dot = ((Wd_v[0] - Wd_v[1])/(current_dt) + Wdd1 +Wdd2+Wdd3) / 4.0;   // omega dot dot is   this dot - last dot / time interval
 
   /***********************************************
   calculate screeners to find power portion of stroke - see spreadsheet if you want to understand this
@@ -357,7 +312,7 @@ void calc_rower_stroke() {
         K_damp_estimator_vector_avg = weighted_avg(K_damp_estimator_vector, &position1);
         K_damp = J_moment*K_damp_estimator_vector_avg;
         position1 = (position1 + 1) % MAX_N;
-        cal_factor = (2.0/2.0)*PI*pow((K_damp/magic_factor), 1.0/3.0); //distance per rev - trigger every 1/2 rev
+        cal_factor = RADSperTICK*pow((K_damp/magic_factor), 1.0/3.0); //distance per rev - trigger every 1/2 rev
       }
       stroke++; 
           

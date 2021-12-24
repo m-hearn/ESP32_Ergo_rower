@@ -72,9 +72,11 @@ double power_ratio_vector[MAX_N];
 double K_damp_estimator_vector[MAX_N];
 double speed_vector[MAX_N];
 
-#define FORCE_BUF 30
-static int  stroke = 0;
-static double  stroke_t = 0;
+
+// Force Graph
+#define FORCE_BUF 100
+static   int    stroke = 0;
+static   double stroke_t = 0;
 volatile int    force_line;
 volatile int    force_ptr;
 volatile double force_graph[FORCE_BUF][2];
