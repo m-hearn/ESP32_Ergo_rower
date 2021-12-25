@@ -213,7 +213,11 @@ void draw_elements(){
       force_line++;
     }
     while (force_line < force_ptr) {
-      if ((force_graph[force_line][0] > (GRAPHX_MIN/FORCE_SCALE_X)) && (force_graph[force_line+1][0]<((GRAPHX_MAX+GRAPHX_MIN)/FORCE_SCALE_X))){
+      if (  (force_graph[force_line][0]   > (GRAPHX_MIN/FORCE_SCALE_X)) 
+         && (force_graph[force_line+1][0] <((GRAPHX_MAX+GRAPHX_MIN)/FORCE_SCALE_X))
+         && (force_graph[force_line][1]   >10)
+         && (force_graph[force_line+1][1] >10)
+         ){
         tft.drawLine(draw_force_x+(int)(force_graph[force_line+0][0]*FORCE_SCALE_X)-GRAPHX_MIN, draw_force_y-(int)(force_graph[force_line+0][1]/FORCE_SCALE_Y),
                       draw_force_x+(int)(force_graph[force_line+1][0]*FORCE_SCALE_X)-GRAPHX_MIN, draw_force_y-(int)(force_graph[force_line+1][1]/FORCE_SCALE_Y), GRAPH_LINE);
       }
