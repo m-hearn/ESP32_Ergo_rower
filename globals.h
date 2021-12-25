@@ -34,7 +34,7 @@ static double J_power = ZERO;
 static double K_damp_estimator_vector_avg;
 
 static double K_damp_estimator = ZERO;
-static double power_ratio_vector_avg = ZERO;
+// static double power_ratio_vector_avg = ZERO;
 
 static double stroke_elapsed = ZERO;
 static double power_elapsed = ZERO;
@@ -44,20 +44,18 @@ static double tmp_elapsed = ZERO;
 static double stroke_distance = ZERO;
 static double stroke_distance_old = ZERO;
 
-static double omega_vector[4];
-static double Wd_v[4];
-
-static double omega_dot_dot = ZERO;
-static double Wdd1 = ZERO;
-static double Wdd2 = ZERO;
-static double Wdd3 = ZERO;
+static double W_v[2];
+static double Wd_v[2];
+static double Wdd_v = ZERO;
+static double Wdd_v1 = ZERO;
 
 static double current_dt = ZERO;
-static double omega_vector_avg = ZERO;
-static double omega_vector_avg_curr = 0.0;
+static double last_dt  = ZERO;
+// static double omega_vector_avg = ZERO;
+// static double omega_vector_avg_curr = 0.0;
 
-static int omega_dot_screen = 0;
-static int omega_dot_dot_screen = 0;
+static int Wd_screen = 0;
+static int Wdd_screen = 0;
 static int power_stroke_screen[2];
 
 unsigned long t_power, t_stroke;  // start time of power stroke and stroke

@@ -5,15 +5,16 @@
   #include <math.h>
   #include <stdio.h>
 #else
-  #define ROWER_PIN 13
+  #define ROWER_PIN 36
   void IRAM_ATTR Interrupt_pin_rower();
+  void IRAM_ATTR Interrupt_pin_rower_change();
 #endif
 
 
-#define K_DAMP_START 0.004
+#define K_DAMP_START 0.02  // K_damp / J_moment
 
-#define W_DOT_DOT_MIN -300.0
-#define W_DOT_DOT_MAX  50.0
+#define W_DOT_DOT_MIN -40.0
+#define W_DOT_DOT_MAX  35.0
 #define W_DOT_MIN 0.0
 #define MIN_RETURN 400
 #define MIN_PULL 0.400
@@ -36,7 +37,7 @@
 // tricky - as moment of inertia changes as the water moves outwards.  Maxes at .34, and min around .26
 						//look at documentation for ways to measure it. Its easy to do.
 
-static double J_moment = 0.21; //kg*m^2 - set this to the moment of inertia of your flywheel. 
+static double J_moment = 0.85; //kg*m^2 - set this to the moment of inertia of your flywheel. 
 static double d_omega_div_omega2 = K_DAMP_START;//erg_constant - to get this for your erg:
 
 
@@ -53,7 +54,6 @@ static double d_omega_div_omega2 = K_DAMP_START;//erg_constant - to get this for
 // 1.35 watts per pound = average
 // 2.7                    elite
 // ergo!  189 to 378!
-
 
 // int force_vector[FORCE_COUNT_MAX];
 
@@ -73,23 +73,39 @@ static int    force_maxh;
 
 #ifdef ARDUINO
 unsigned long last_interrupt;
-// volatile int interrupt_count = 0;
+volatile int interrupt_count = 0;
 
-#define DEBOUNCE_INT 5
-void IRAM_ATTR Interrupt_pin_rower()
+// void IRAM_ATTR Interrupt_pin_rower()
+// {
+//   unsigned long now = millis();
+//   // interrupt_count++;
+
+//   if (
+//     // (interrupt_count > 1) && 
+//     (now - last_interrupt > DEBOUNCE_INT)) {
+//     row_buff_head = (row_buff_head+1)&ROW_BUFF_SIZE;
+//     row_buffer[row_buff_head] = now;
+//     last_interrupt = now;
+//     // interrupt_count = 0;
+//   }
+// };
+#define DEBOUNCE_INT 2
+void IRAM_ATTR Interrupt_pin_rower_change()
 {
   unsigned long now = millis();
-  // interrupt_count++;
 
-  if (
-    // (interrupt_count > 1) && 
-    (now - last_interrupt > DEBOUNCE_INT)) {
-    row_buff_head = (row_buff_head+1)&ROW_BUFF_SIZE;
-    row_buffer[row_buff_head] = now;
-    last_interrupt = now;
-    // interrupt_count = 0;
+  if ((now - last_interrupt) > DEBOUNCE_INT)
+  {
+    if (interrupt_count++ > 0) 
+    {
+      row_buff_head = (row_buff_head+1)&ROW_BUFF_SIZE;
+      row_buffer[row_buff_head] = now;
+      last_interrupt = now;
+      interrupt_count = 0;
+    }
   }
 };
+
 
 #endif
 
@@ -114,7 +130,8 @@ void setup_rower(){
   FORCE_SCALE_Y = force_graph_maxy / (double) draw_force_h;
   
   #ifdef ARDUINO
-    attachInterrupt(ROWER_PIN, Interrupt_pin_rower, RISING);
+    // attachInterrupt(ROWER_PIN, Interrupt_pin_rower, RISING);
+    attachInterrupt(ROWER_PIN, Interrupt_pin_rower_change, CHANGE);
   #endif
 };
 
@@ -143,17 +160,17 @@ void start_rower(){
   }
   stroke_vector_avg = 2.0;
 
-  omega_dot_screen= 0;
-  omega_dot_dot_screen= 0;
-  omega_vector[0]= ZERO;
-  omega_vector[1]= ZERO;
-  omega_vector[2]= ZERO;
-  omega_vector[3]= ZERO;
+  Wd_screen= 0;
+  Wdd_screen= 0;
+  W_v[0]= ZERO;
+  W_v[1]= ZERO;
+  // W_v[2]= ZERO;
+  // W_v[3]= ZERO;
 
   Wd_v[0]= ZERO;
   Wd_v[1]= ZERO;
-  Wd_v[2]= ZERO;
-  Wd_v[3]= ZERO;
+  // Wd_v[2]= ZERO;
+  // Wd_v[3]= ZERO;
 	
 	power_stroke_screen[0]= 1;
 	power_stroke_screen[1]= 0;
@@ -230,49 +247,37 @@ return temp_sum;
 //  ######  ##     ## ########  ######      ######     ##    ##     ##  #######  ##    ## ######## 
 
 void calc_rower_stroke() {
+  int j;
   /***********************************************
    calculate omegas
   ************************************************/
 
-  current_dt = (t_now - t_last)/1000.0;
+  current_dt = (t_now - t_last) Seconds;
   if (0 == current_dt) return; // also avoids DIV by 0 -- otherwise use /(current_dt+DELTA)
 
   // save last
-  omega_vector[3] = omega_vector[2];
-  omega_vector[2] = omega_vector[1];
-  omega_vector[1] = omega_vector[0];
-  Wd_v[3] = Wd_v[2];    
-  Wd_v[2] = Wd_v[1];
-  Wd_v[1] = Wd_v[0]; 
-  Wdd3 = Wdd2;
-  Wdd2 = Wdd1;    
-  Wdd1 = omega_dot_dot;    
+  W_v[1]  = W_v[0];
+  Wd_v[1] = Wd_v[0];  
+  Wdd_v1  = Wdd_v;    
 
   // calc W and Wd
-  omega_vector[0] = (RADSperTICK/(current_dt) + omega_vector[1] + omega_vector[2] + omega_vector[3]) / 4.0;   //omega_vector is rad/s  2*pi rad per rev - 3 of 6 ticks.
-  Wd_v[0] = ((omega_vector[0] - omega_vector[1])/(current_dt)  + Wd_v[1] + Wd_v[2] + Wd_v[3]) / 4.0;  // omega dot is this speed - last speed / time interval
-  
-  // if jerk (Wdd) is really high - guess that we got 2 of 2 interrupts instead of 2 of 3.  so pi*2*2/6 instead of pi*2*3/6
-  // if ((Wd_v[0] - Wd_v[1])/(current_dt+DELTA) > 1000) {
-  //   current_dt = current_dt*1.5;
-  //   omega_vector[0] = (PI/current_dt + omega_vector[1] + omega_vector[2] + omega_vector[3]) / 4.0;   //omega_vector is rad/s  2*pi rad per rev - 3 of 6 ticks.
-  //   Wd_v[0] = ((omega_vector[0] - omega_vector[1])/(current_dt+DELTA)  + Wd_v[1] + Wd_v[2] + Wd_v[3]) / 4.0;  // omega dot is this speed - last speed / time interval
-  // }
-  omega_dot_dot = ((Wd_v[0] - Wd_v[1])/(current_dt) + Wdd1 +Wdd2+Wdd3) / 4.0;   // omega dot dot is   this dot - last dot / time interval
+  W_v[0]  = (2*RADSperTICK/(current_dt+last_dt) + W_v[1])/2.0;  //omega_vector is rad/s  2*pi/6 rad per tick
+  Wd_v[0] = ((W_v[0] - W_v[1])/(current_dt)     + Wd_v[1]) /2.0;  // omega dot acceleration, i.e. this speed - last speed / time interval
+  Wdd_v   = ((Wd_v[0] - Wd_v[1])/(current_dt)   + Wdd_v1) /2.0; //+Wdd2) / 3.0; //+Wdd3) / 4.0;   // omega dot dot is   this dot - last dot / time interval
 
   /***********************************************
   calculate screeners to find power portion of stroke - see spreadsheet if you want to understand this
   ************************************************/
   
-  if ((omega_dot_dot > W_DOT_DOT_MIN) && (omega_dot_dot < W_DOT_DOT_MAX))
-        omega_dot_dot_screen = 0;
-  else  omega_dot_dot_screen = 1;
+  if ((Wdd_v > W_DOT_DOT_MIN) && (Wdd_v < W_DOT_DOT_MAX))
+        Wdd_screen = 0;
+  else  Wdd_screen = 1;
 
   if (Wd_v[0] > W_DOT_MIN)
-        omega_dot_screen = 1;
-  else  omega_dot_screen = 0;
+        Wd_screen = 1;
+  else  Wd_screen = 0;
 
-  if ( (omega_dot_dot_screen ==1) || ((omega_dot_screen ==1) && (power_stroke_screen[0] ==1))) {
+  if ( (Wdd_screen ==1) || ((Wd_screen ==1) && (power_stroke_screen[0] ==1))) {
     power_stroke_screen[1] = power_stroke_screen[0];
     power_stroke_screen[0] = 1;
   }	
@@ -295,7 +300,6 @@ void calc_rower_stroke() {
 88888P"   "Y88P"   "Y8888888P"   "Y8888  888     
 888                                              
 888                                     
-
 888 
   **********************************************************/
   if ((power_stroke_screen[0] ==1) && (power_stroke_screen[1] ==0)) {
@@ -364,8 +368,8 @@ Y88b 888 Y8b.     Y88b.    888  888 Y88b 888
 
       K_damp_estimator = 0.0;
 
-      omega_vector_avg_curr = omega_vector_avg/(stroke_elapsed+DELTA);
-      omega_vector_avg = 0.0;
+      // omega_vector_avg_curr = omega_vector_avg/(stroke_elapsed+DELTA);
+      // omega_vector_avg = 0.0;
       stroke_distance = distance_rowed-stroke_distance_old;
       stroke_distance_old = distance_rowed;
       
@@ -381,14 +385,17 @@ Y88b 888 Y8b.     Y88b.    888  888 Y88b 888
         asplit_secs-=    asplit_minutes*60;
       }
       
-      // calc Watts
-      power_ratio_vector[position2] = power_elapsed/(stroke_elapsed + DELTA);
-      power_ratio_vector_avg = weighted_avg(power_ratio_vector, &position2);
+      // // calc Watts
+      // power_ratio_vector[position2] = power_elapsed/(stroke_elapsed + DELTA);
+      // power_ratio_vector_avg = weighted_avg(power_ratio_vector, &position2);
 
       power_vector[position2]= (J_power + K_power)/(stroke_elapsed + DELTA);
       if (power_vector[position2] > 999.0) {
         power_vector[position2] = 0.0;
       }
+     	// for (j =0;j<MAX_N; j++) {
+		    //  printf("%f,",power_vector[(position2 + MAX_N -j)% MAX_N]);
+	    // }
       power_vector_avg = weighted_avg(power_vector, &position2);
       
       if ((power_vector_avg > 10.0) & (power_vector_avg < 900) & (stroke_elapsed < 6000.0)) {
@@ -421,12 +428,12 @@ Y88b 888 Y8b.     Y88b.    888  888 Y88b 888
    if inside power stroke
   **********************************************************/
   if (power_stroke_screen[0] ==1) {
-    J_power = J_power + J_moment * omega_vector[0]*Wd_v[0]*current_dt;
-    K_power = K_power + K_damp*(omega_vector[0]*omega_vector[0]*omega_vector[0])*current_dt;
-    omega_vector_avg = omega_vector_avg + omega_vector[0]*current_dt;
+    J_power = J_power + J_moment * W_v[0]*Wd_v[0]*current_dt;
+    K_power = K_power + K_damp   *(W_v[0]*W_v[0]*W_v[0])*current_dt;
+    // omega_vector_avg = omega_vector_avg + W_v[0]*current_dt;
 
     // setup force plot
-    force = (force + (J_moment*Wd_v[0] + K_damp*(omega_vector[0]*omega_vector[0]) ) /(current_dt)) /2;
+    force = (force + (J_moment*Wd_v[0] + K_damp*(W_v[0]*W_v[0]) ) /(current_dt)) /2;
     if (force > force_max) force_max = force;
     if (force > force_graph_maxy) force = force_graph_maxy;
     stroke_t+=current_dt;
@@ -440,18 +447,20 @@ Y88b 888 Y8b.     Y88b.    888  888 Y88b 888
    if in decay stroke
   **********************************************************/
   if (power_stroke_screen[0] ==0) {
-    K_damp_estimator = K_damp_estimator-(Wd_v[0]/((omega_vector[0]+DELTA)*(omega_vector[0]+DELTA)))*current_dt;
-    omega_vector_avg = omega_vector_avg + omega_vector[0]*current_dt;
+    K_damp_estimator = K_damp_estimator-(Wd_v[0]/((W_v[0]+DELTA)*(W_v[0]+DELTA)))*current_dt;
+    // omega_vector_avg = omega_vector_avg + W_v[0]*current_dt;
   }
 
   distance_rowed += cal_factor;
   t_last = t_now;
+  last_dt = current_dt;
 
-  if (!DEBUG) {
-    printf("%6ld,%4d,%4.3f,%4.3f,%d,%3.0f,% 5.0f,% 5.0f,%4.3f,%5.5f,%2.0f,%3.0f,%4.0f,%3.0f\n"
+  if (!DEBUG) 
+  {
+    printf("%6ld,%4d,%4.3f,%4.3f,%d,%4.1f,% 6.1f,% 6.1f,%4.3f,%5.5f,%2.0f,%3.0f,%4.0f,%3.0f\n"
       ,    t_now,stroke, stroke_t,current_dt
       ,                          power_stroke_screen[0]*9
-      , omega_vector[0], Wd_v[0], omega_dot_dot
+      , W_v[0], Wd_v[0], Wdd_v
       , cal_factor
       ,K_damp //, K_damp_estimator);
       , 60.0/stroke_vector_avg
@@ -468,15 +477,15 @@ int main() {
 
   setup_rower();
 
-  printf("     T,  S#,   St,   dt,R,  W,   Wd,  Wdd,    C,   damp,SM,  W,   D, Kg\n"); 
+  printf("     T,  S#,   St,   dt,R,  W,     Wd,    Wdd,    C,   damp,SM,  W,   D, Kg\n"); 
 
-  t_last = erg_sim2[0];
+  t_last = erg_sim[0];
   t_now  = t_last;
   t_clock = t_now;
   start_rower();
 
   while (t_now <= 888888) {
-    t_now = erg_sim2[ind++];
+    t_now = erg_sim[ind++];
     calc_rower_stroke();
 
 
