@@ -176,7 +176,8 @@ void setup() {
   while (!Serial);
 
   DEBUG= !(digitalRead(DEBUG_PIN));
-
+  // DEBUG = 1;
+  
   if(!DEBUG)
     Serial.printf("T,S#,St,dt,R,W,Wd,Wdd,C,damp,SPM,Watts,D,force\n");  
 
@@ -184,7 +185,7 @@ void setup() {
   
   // xTaskCreatePinnedToCore(setup_time, "time", 1000, NULL, 0, &Time_t_handle, DISPLAY_CPU);
 
-  //setup_display();
+  setup_display();
 
   setup_rower();
 }
