@@ -5,7 +5,7 @@
 #define DELTA 0.00001
 #define ZERO 0.0
 
-#define Seconds /1000.0
+#define Seconds *1000.0
 
 #ifndef PI
 #define PI 3.1415926535897932384626433832795
@@ -16,15 +16,21 @@ volatile unsigned long row_buffer[ROW_BUFF_SIZE+1];
 volatile int row_buff_head;
 int row_buff_tail;
 
+// tricky - as moment of inertia changes as the water moves outwards.  Maxes at .34, and min around .26
+						//look at documentation for ways to measure it. Its easy to do.
 
-static double K_damp; //related by J_moment*omega_dot = K_damp * omega^2 during non-power part of stroke
-static double cal_factor; //distance per rev ... calculated later
+#define K_DAMP_START 0.022  // K_damp / J_moment
+static double J_moment = 0.9; //kg*m^2 - set this to the moment of inertia of your flywheel. 
 static double magic_factor = 2.8; //a heuristic constant people use to relate revs to distance-rowed
 
+static double d_omega_div_omega2 = K_DAMP_START;//erg_constant - to get this for your erg:
+static double K_damp; //related by J_moment*omega_dot = K_damp * omega^2 during non-power part of stroke
 
+
+static double cal_factor; //distance per rev ... calculated later
 static double volatile distance_rowed = ZERO;
 
-static long volatile chop_counter;	
+// static long volatile chop_counter;	
 
 static double stroke_vector_avg;
 static double power_vector_avg;
