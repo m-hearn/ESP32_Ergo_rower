@@ -10,8 +10,8 @@
   void IRAM_ATTR Interrupt_pin_rower_change();
 #endif
 
+extern void powergraph_plot(double watts, double spm);
 
-#define K_DAMP_START 0.022  // K_damp / J_moment
 
 #define W_DOT_DOT_MIN -40.0
 #define W_DOT_DOT_MAX  35.0
@@ -32,32 +32,24 @@
                            "Y8bbdP"   
  */
 
+// http://eodg.atm.ox.ac.uk/user/dudhia/rowing/physics/ergometer.html
 
 
-// tricky - as moment of inertia changes as the water moves outwards.  Maxes at .34, and min around .26
-						//look at documentation for ways to measure it. Its easy to do.
 
-static double J_moment = 0.90; //kg*m^2 - set this to the moment of inertia of your flywheel. 
-static double d_omega_div_omega2 = K_DAMP_START;//erg_constant - to get this for your erg:
+
 
 
 // https://www.concept2.com/indoor-rowers/training/calculators/watts-calculator
 // 6st average = 120 watts =  2:22
-//  2:00 for 500 =  202.5 watts
-//  1:50            263
-//        1:49      270
-//       1:48       280
-//      1:46        290
-//     1:45         300
-//  1:42            330
-//  1:40            350
-//  1:37            378
-//  1:30  for 500 = 480 watts
-
-
-// 1.35 watts per pound = average
-// 2.7                    elite
-// ergo!  189 to 378!
+// 10st avrage = 189       =  2:01
+//      good   = 280       =  1:48
+//      elite  = 380       =  1:37
+// 140 2:15      260 1:50
+// 160 2:10      280 1:48
+// 180 2:05      300 1:45
+// 200 2:01      320 1:43
+// 220 1:57      340 1:41
+// 240 1:53      360 1:39
 
 // int force_vector[FORCE_COUNT_MAX];
 
@@ -251,12 +243,11 @@ return temp_sum;
 //  ######  ##     ## ########  ######      ######     ##    ##     ##  #######  ##    ## ######## 
 
 void calc_rower_stroke() {
-  int j;
   /***********************************************
    calculate omegas
   ************************************************/
 
-  current_dt = (t_now - t_last) Seconds;
+  current_dt = (t_now - t_last) / 1000.0;
   if (0 == current_dt) return; // also avoids DIV by 0 -- otherwise use /(current_dt+DELTA)
 
   // save last
@@ -316,11 +307,11 @@ void calc_rower_stroke() {
       J_power = 0.0;
       K_power = 0.0;
       if(stroke > 1) {
-        K_damp_estimator_vector[position1] = K_damp_estimator/(stroke_elapsed-power_elapsed+.000001);
+        K_damp_estimator_vector[position1] = K_damp_estimator/(stroke_elapsed-power_elapsed+DELTA);
         K_damp_estimator_vector_avg = weighted_avg(K_damp_estimator_vector, &position1);
         K_damp = J_moment*K_damp_estimator_vector_avg;
         position1 = (position1 + 1) % MAX_N;
-        cal_factor = RADSperTICK*pow((K_damp/magic_factor), 1.0/3.0); //distance per rev - trigger every 1/2 rev
+        cal_factor = RADSperTICK*pow((K_damp/magic_factor), 1.0/3.0); //distance per tick
       }
       stroke++; 
           
@@ -362,12 +353,12 @@ Y88b 888 Y8b.     Y88b.    888  888 Y88b 888
                                     "Y88P"  
   **********************************************************/
   if ((power_stroke_screen[0] ==0) && (power_stroke_screen[1] ==1)) {
-    tmp_elapsed = (t_now - t_power) Seconds;
+    tmp_elapsed = (t_now - t_power) / 1000.0;
     // printf("X %f,%f,%ld\n", tmp_elapsed, power_elapsed, stroke);
     if ((tmp_elapsed > MIN_PULL) || (stroke == 0)) {  // stay in Power stroke for a while, avoid a false start/stop
 
       power_elapsed = tmp_elapsed;
-      stroke_elapsed = (t_now - t_stroke) Seconds;
+      stroke_elapsed = (t_now - t_stroke) / 1000.0;
       t_stroke = t_now;
 
       K_damp_estimator = 0.0;
@@ -378,6 +369,7 @@ Y88b 888 Y8b.     Y88b.    888  888 Y88b 888
       stroke_distance_old = distance_rowed;
       
       speed_vector[position2] = stroke_distance/(stroke_elapsed +DELTA);
+
       if (stroke > 4) {
         split_secs = (int) 500.0/(weighted_avg(speed_vector, &position2) + DELTA);
         // format split
@@ -387,6 +379,7 @@ Y88b 888 Y8b.     Y88b.    888  888 Y88b 888
         asplit_secs = (int) 500.0*row_elaspsed/distance_rowed;
         asplit_minutes = asplit_secs/60;
         asplit_secs-=    asplit_minutes*60;
+
       }
       
       // // calc Watts
@@ -397,17 +390,17 @@ Y88b 888 Y8b.     Y88b.    888  888 Y88b 888
       if (power_vector[position2] > 999.0) {
         power_vector[position2] = 0.0;
       }
-     	// for (j =0;j<MAX_N; j++) {
-		    //  printf("%f,",power_vector[(position2 + MAX_N -j)% MAX_N]);
-	    // }
       power_vector_avg = weighted_avg(power_vector, &position2);
-      
+
       if ((power_vector_avg > 10.0) & (power_vector_avg < 900) & (stroke_elapsed < 6000.0)) {
         calorie_tot = calorie_tot+(4*power_vector_avg+350)*(stroke_elapsed)/(4.1868 * 1000.0);
       }
       
       stroke_vector[position2]= stroke_elapsed;
       stroke_vector_avg = weighted_avg(stroke_vector,&position2);
+
+      powergraph_plot(power_vector_avg, (60.0/(stroke_vector_avg+DELTA)));
+     
       
       position2 = (position2 + 1) % MAX_N;
 
@@ -496,7 +489,7 @@ int main() {
     if (rowing && !paused) {
       // 27 2:14 2:13 252   230 0:01:01.1
       //  123456789012345678901234567890
-      if ((t_real - t_clock) Seconds > 0.1) {
+      if ((t_real - t_clock) > 0.1 Seconds) {
         row_elaspsed+=0.1;
         row_secs    +=0.1;
 
