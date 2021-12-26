@@ -219,15 +219,16 @@ void loop(void) {
 
   delay(10);
 
-  if ((t_real - t_power) Seconds > 5) { paused = rowing;}  // can't be paused and rowing!
+  if ((t_real - t_power) > 5 Seconds) { paused = rowing;}  // can't be paused and rowing!
 
   if (rowing && !paused) {
     // 27 2:14 2:13 252   230 0:01:01.1
     //  123456789012345678901234567890
-    if ((t_real - t_clock) Seconds > 0.1) {
+    if ((t_real - t_clock) > 0.1 Seconds) {
       t_clock += 100;
       row_elaspsed+=0.1;
       row_secs    +=0.1;
+      powergraph_scroll();
 
       if (row_secs >= 60) {
         stats_disp[27]='X'; // make the display think that drawing a : is necessary - because it's different
