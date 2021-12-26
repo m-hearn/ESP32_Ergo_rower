@@ -12,6 +12,7 @@
                               88                              d8'  
  */
 
+// http://www.barth-dev.de/online/rgb565-color-picker/  
 
 #include "SPI.h"
 #include "TFT_eSPI.h"
@@ -30,12 +31,76 @@
 
 
 #define CALIBRATION_FILE "/TouchCalData2"
+TaskHandle_t Display_t_handle;
 
 TFT_eSPI tft = TFT_eSPI();
 
-TFT_eSprite spr = TFT_eSprite(&tft);
+TFT_eSprite spr_chr = TFT_eSprite(&tft);
 
-TaskHandle_t Display_t_handle;
+TFT_eSprite spr_pg = TFT_eSprite(&tft);
+uint16_t palette[16];
+int pg_scroll_int =0;
+
+void powergraph_setup(){
+  // Populate the palette table, table must have 16 entries
+  palette[0]  = TFT_BLACK;
+  palette[1]  = TFT_ORANGE;
+  palette[2]  = TFT_DARKGREEN;
+  palette[3]  = TFT_DARKCYAN;
+  palette[4]  = TFT_MAROON;
+  palette[5]  = TFT_PURPLE;
+  palette[6]  = TFT_OLIVE;
+  palette[7]  = 0x39c7; //56,56,56
+  palette[8]  = TFT_ORANGE;
+  palette[9]  = TFT_BLUE;
+  palette[10] = TFT_GREEN;
+  palette[11] = TFT_CYAN;
+  palette[12] = TFT_RED;
+  palette[13] = TFT_NAVY;
+  palette[14] = TFT_YELLOW;
+  palette[15] = TFT_WHITE;
+
+  spr_pg.createSprite(200,75);
+  spr_pg.setColorDepth(4);
+  spr_pg.createPalette(palette);
+  spr_pg.drawRect(0,0,200,75,7);
+  spr_pg.setScrollRect(1,1,197,72); //,0);
+}
+
+void powergraph_draw(){
+  // if (powergraph.draw)
+  spr_pg.pushSprite(115,230);
+}
+
+void powergraph_plot(double watts, double spm){
+  int dw, ds;
+
+  dw = 70- (int) watts*70.0/400.0;
+  ds = 70- (int) spm  *70.0/60.0;
+  // watts
+  if (dw > 2 && dw < 73) {
+    spr_pg.drawPixel(2, dw-1, 12);
+    spr_pg.drawPixel(2, dw, 12);
+    spr_pg.drawPixel(2, dw+1, 12);
+  }
+  // spm
+  if (ds > 2 && ds < 73) {
+    spr_pg.drawPixel(2, ds-1, 9);
+    spr_pg.drawPixel(2, ds, 9);
+    spr_pg.drawPixel(2, ds+1, 9);
+  }
+  powergraph_draw();
+}
+
+void powergraph_scroll(){
+  // update called every 0.1
+  if (++pg_scroll_int >= 20) {
+    pg_scroll_int = 0;
+    spr_pg.scroll(1,0);
+    spr_pg.drawFastVLine(2,1,73,0);
+    powergraph_draw();
+  }
+}
 
 
 
@@ -65,17 +130,19 @@ void setup_display(){
   tft.setTextSize(2);
   tft.setRotation(2);
 
+  powergraph_setup();
+
   //touch_calibrate();
 
   xTaskCreatePinnedToCore(handle_display, "Display", 10000, NULL, 0, &Display_t_handle, DISPLAY_CPU);
 
   tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK); 
   tft.setTextSize(2);
-  tft.setCursor(X_SM+58,Y_SM+0);
+  tft.setCursor(X_SM+68,Y_SM+0);
   tft.print('s');
-  tft.setCursor(X_SM+58+8,Y_SM+9);
+  tft.setCursor(X_SM+68+8,Y_SM+9);
   tft.print('/');
-  tft.setCursor(X_SM+58+18,Y_SM+12);
+  tft.setCursor(X_SM+68+18,Y_SM+12);
   tft.print('m');
   tft.setCursor(X_SPLIT+105,140);
   tft.printf("/500m");
@@ -87,6 +154,8 @@ void setup_display(){
   tft.print('W');
   tft.setCursor(18,360);
   tft.printf("Kg");
+
+
 
   tft.drawLine(draw_force_x-1,draw_force_y+1,draw_force_x+248,draw_force_y+1,GRAPH_AXIS);
   tft.drawLine(draw_force_x-1,draw_force_y- draw_force_h,draw_force_x-1,draw_force_y+1,GRAPH_AXIS);
@@ -173,25 +242,25 @@ void draw_elements(){
       }
       if(disp_loc[i][2]==1){
         if       (disp_loc[i][3]==1) {
-          spr.createSprite(35,35);
-          spr.setFreeFont(VERD18);
+          spr_chr.createSprite(35,35);
+          spr_chr.setFreeFont(VERD18);
         }else if (disp_loc[i][3]==2) {
-          spr.createSprite(45,45);
-          spr.setFreeFont(VERD22);
+          spr_chr.createSprite(45,45);
+          spr_chr.setFreeFont(VERD22);
         }else if (disp_loc[i][3]==3) {
-          spr.createSprite(70,75);
-          spr.setFreeFont(VERD36);
+          spr_chr.createSprite(70,75);
+          spr_chr.setFreeFont(VERD36);
         }
         // spr.createSprite(65,51);
         // spr.setFreeFont(VERD22);
-        spr.fillSprite(TFT_ORANGE);
-        spr.drawRect(0,0,31,31,TFT_ORANGE);
-        spr.setTextColor(TFT_WHITE,TFT_BLACK);
-        if ((ch>='0')&&(ch<='9'))   spr.drawNumber(ch-'0', 0, 0);
-        else if (ch == ':')         spr.drawString(":", 0, 0);
+        spr_chr.fillSprite(TFT_ORANGE);
+        spr_chr.drawRect(0,0,31,31,TFT_ORANGE);
+        spr_chr.setTextColor(TFT_WHITE,TFT_BLACK);
+        if ((ch>='0')&&(ch<='9'))   spr_chr.drawNumber(ch-'0', 0, 0);
+        else if (ch == ':')         spr_chr.drawString(":", 0, 0);
         // spr.pushSprite(disp_loc[i][0], disp_loc[i][1], TFT_ORANGE);  
-        spr.pushSprite(disp_loc[i][0], disp_loc[i][1],TFT_ORANGE);  
-        spr.deleteSprite();
+        spr_chr.pushSprite(disp_loc[i][0], disp_loc[i][1],TFT_ORANGE);  
+        spr_chr.deleteSprite();
       }
     }
   }
@@ -223,7 +292,11 @@ void draw_elements(){
       }
       force_line++;
     }
-  }
+  } // rowing
+
+
+
+
 };
 
 
