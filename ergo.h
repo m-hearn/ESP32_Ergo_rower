@@ -11,12 +11,12 @@
 #endif
 
 
-#define K_DAMP_START 0.02  // K_damp / J_moment
+#define K_DAMP_START 0.022  // K_damp / J_moment
 
 #define W_DOT_DOT_MIN -40.0
 #define W_DOT_DOT_MAX  35.0
 #define W_DOT_MIN 0.0
-#define MIN_RETURN 400
+#define MIN_RETURN 700
 #define MIN_PULL 0.400
 
 /* 
@@ -37,7 +37,7 @@
 // tricky - as moment of inertia changes as the water moves outwards.  Maxes at .34, and min around .26
 						//look at documentation for ways to measure it. Its easy to do.
 
-static double J_moment = 0.85; //kg*m^2 - set this to the moment of inertia of your flywheel. 
+static double J_moment = 0.90; //kg*m^2 - set this to the moment of inertia of your flywheel. 
 static double d_omega_div_omega2 = K_DAMP_START;//erg_constant - to get this for your erg:
 
 
@@ -45,6 +45,10 @@ static double d_omega_div_omega2 = K_DAMP_START;//erg_constant - to get this for
 // 6st average = 120 watts =  2:22
 //  2:00 for 500 =  202.5 watts
 //  1:50            263
+//        1:49      270
+//       1:48       280
+//      1:46        290
+//     1:45         300
 //  1:42            330
 //  1:40            350
 //  1:37            378
@@ -303,7 +307,7 @@ void calc_rower_stroke() {
 888 
   **********************************************************/
   if ((power_stroke_screen[0] ==1) && (power_stroke_screen[1] ==0)) {
-    if ((t_now - t_stroke) < MIN_RETURN) {
+    if ((t_now - t_stroke) < MIN_RETURN) {  // put back into decay, ended too soon.
       power_stroke_screen[0] = 0;
     } else {
       //start clock1 = power timer
