@@ -40,7 +40,7 @@ static double J_power = ZERO;
 static double K_damp_estimator_vector_avg;
 
 static double K_damp_estimator = ZERO;
-// static double power_ratio_vector_avg = ZERO;
+static double power_ratio_vector_avg = ZERO;
 
 static double stroke_elapsed = ZERO;
 static double power_elapsed = ZERO;
@@ -102,6 +102,21 @@ static int split_minutes;
 static int split_secs;
 static int asplit_minutes;
 static int asplit_secs;
+
+struct stats {
+	int    row_hrs;
+	int    row_mins;
+	char   row_secs[5];
+	int split_mins;
+	int split_secs;
+	int asplit_mins;
+	int asplit_secs;
+	double spm;
+	int	 watts;
+	char distance[6];
+};
+
+struct stats curr_stat, disp_stat;
 
 static int DEBUG = 0;
 static int rowing =0;
