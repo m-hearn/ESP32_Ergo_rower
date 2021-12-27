@@ -37,39 +37,42 @@ TFT_eSPI tft = TFT_eSPI();
 
 TFT_eSprite spr_chr = TFT_eSprite(&tft);
 
-TFT_eSprite spr_pg = TFT_eSprite(&tft);
-uint16_t palette[16];
+TFT_eSprite pg_sprite = TFT_eSprite(&tft);
+uint16_t pg_palette[16];
 int pg_scroll_int =0;
+int pg_dirty  = 0;
 
 void powergraph_setup(){
   // Populate the palette table, table must have 16 entries
-  palette[0]  = TFT_BLACK;
-  palette[1]  = TFT_ORANGE;
-  palette[2]  = TFT_DARKGREEN;
-  palette[3]  = TFT_DARKCYAN;
-  palette[4]  = TFT_MAROON;
-  palette[5]  = TFT_PURPLE;
-  palette[6]  = TFT_OLIVE;
-  palette[7]  = 0x39c7; //56,56,56
-  palette[8]  = TFT_ORANGE;
-  palette[9]  = TFT_BLUE;
-  palette[10] = TFT_GREEN;
-  palette[11] = TFT_CYAN;
-  palette[12] = TFT_RED;
-  palette[13] = TFT_NAVY;
-  palette[14] = TFT_YELLOW;
-  palette[15] = TFT_WHITE;
+  pg_palette[0]  = TFT_BLACK;
+  pg_palette[1]  = TFT_ORANGE;
+  pg_palette[2]  = TFT_DARKGREEN;
+  pg_palette[3]  = TFT_DARKCYAN;
+  pg_palette[4]  = TFT_MAROON;
+  pg_palette[5]  = TFT_PURPLE;
+  pg_palette[6]  = TFT_OLIVE;
+  pg_palette[7]  = 0x39c7; //56,56,56
+  pg_palette[8]  = TFT_ORANGE;
+  pg_palette[9]  = TFT_BLUE;
+  pg_palette[10] = TFT_GREEN;
+  pg_palette[11] = TFT_CYAN;
+  pg_palette[12] = TFT_RED;
+  pg_palette[13] = TFT_NAVY;
+  pg_palette[14] = TFT_YELLOW;
+  pg_palette[15] = TFT_WHITE;
 
-  spr_pg.createSprite(200,75);
-  spr_pg.setColorDepth(4);
-  spr_pg.createPalette(palette);
-  spr_pg.drawRect(0,0,200,75,7);
-  spr_pg.setScrollRect(1,1,197,72); //,0);
+  pg_sprite.createSprite(200,75);
+  pg_sprite.setColorDepth(4);
+  pg_sprite.createPalette(pg_palette);
+  pg_sprite.drawRect(0,0,200,75,7);
+  pg_sprite.setScrollRect(1,1,197,72); //,0);
 }
 
 void powergraph_draw(){
   // if (powergraph.draw)
-  spr_pg.pushSprite(115,230);
+  if (pg_dirty)
+    pg_sprite.pushSprite(115,230);
+  pg_dirty = 0;
 }
 
 void powergraph_plot(double watts, double spm){
@@ -79,26 +82,26 @@ void powergraph_plot(double watts, double spm){
   ds = 70- (int) spm  *70.0/60.0;
   // watts
   if (dw > 2 && dw < 73) {
-    spr_pg.drawPixel(2, dw-1, 12);
-    spr_pg.drawPixel(2, dw, 12);
-    spr_pg.drawPixel(2, dw+1, 12);
+    pg_sprite.drawPixel(2, dw-1, 12);
+    pg_sprite.drawPixel(2, dw, 12);
+    pg_sprite.drawPixel(2, dw+1, 12);
   }
   // spm
   if (ds > 2 && ds < 73) {
-    spr_pg.drawPixel(2, ds-1, 9);
-    spr_pg.drawPixel(2, ds, 9);
-    spr_pg.drawPixel(2, ds+1, 9);
+    pg_sprite.drawPixel(2, ds-1, 9);
+    pg_sprite.drawPixel(2, ds, 9);
+    pg_sprite.drawPixel(2, ds+1, 9);
   }
-  powergraph_draw();
+  pg_dirty = 1;
 }
 
 void powergraph_scroll(){
   // update called every 0.1
   if (++pg_scroll_int >= 20) {
     pg_scroll_int = 0;
-    spr_pg.scroll(1,0);
-    spr_pg.drawFastVLine(2,1,73,0);
-    powergraph_draw();
+    pg_sprite.scroll(1,0);
+    pg_sprite.drawFastVLine(2,1,73,0);
+    pg_dirty = 1;
   }
 }
 
@@ -292,6 +295,7 @@ void draw_elements(){
       }
       force_line++;
     }
+    powergraph_draw();
   } // rowing
 
 
