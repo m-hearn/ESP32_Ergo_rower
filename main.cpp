@@ -238,9 +238,13 @@ void loop(void) {
           row_hours++;
           row_minutes -= 60;
           if (row_hours > 9) row_hours = 0;
+          curr_stat.row_mins = row_minutes;
+          curr_stat.row_hrs = row_hours;
         }
       }
       sprintf(stats_curr+17,"%5.0f %1d:%02d:%04.1f", distance_rowed, row_hours, row_minutes, row_secs);
+      sprintf(curr_stat.distance,"%5.0f", distance_rowed);
+      sprintf(curr_stat.row_secs,"%04.1f", row_secs);
     }
   }
 };
