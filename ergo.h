@@ -71,20 +71,6 @@ static int    force_maxh;
 unsigned long last_interrupt;
 volatile int interrupt_count = 0;
 
-// void IRAM_ATTR Interrupt_pin_rower()
-// {
-//   unsigned long now = millis();
-//   // interrupt_count++;
-
-//   if (
-//     // (interrupt_count > 1) && 
-//     (now - last_interrupt > DEBOUNCE_INT)) {
-//     row_buff_head = (row_buff_head+1)&ROW_BUFF_SIZE;
-//     row_buffer[row_buff_head] = now;
-//     last_interrupt = now;
-//     // interrupt_count = 0;
-//   }
-// };
 #define DEBOUNCE_INT 2
 void IRAM_ATTR Interrupt_pin_rower_change()
 {
@@ -92,7 +78,7 @@ void IRAM_ATTR Interrupt_pin_rower_change()
 
   if ((now - last_interrupt) > DEBOUNCE_INT)
   {
-    if (interrupt_count++ > 0) 
+    if (interrupt_count++ > 0) // rise and fall pair 
     {
       row_buff_head = (row_buff_head+1)&ROW_BUFF_SIZE;
       row_buffer[row_buff_head] = now;
@@ -101,8 +87,6 @@ void IRAM_ATTR Interrupt_pin_rower_change()
     }
   }
 };
-
-
 #endif
 
 //  ######  ######## ######## ##     ## ########  
@@ -160,13 +144,9 @@ void start_rower(){
   Wdd_screen= 0;
   W_v[0]= ZERO;
   W_v[1]= ZERO;
-  // W_v[2]= ZERO;
-  // W_v[3]= ZERO;
 
   Wd_v[0]= ZERO;
   Wd_v[1]= ZERO;
-  // Wd_v[2]= ZERO;
-  // Wd_v[3]= ZERO;
 	
 	power_stroke_screen[0]= 1;
 	power_stroke_screen[1]= 0;
@@ -380,11 +360,15 @@ Y88b 888 Y8b.     Y88b.    888  888 Y88b 888
         asplit_minutes = asplit_secs/60;
         asplit_secs-=    asplit_minutes*60;
 
+        curr_stat.split_mins = split_minutes;
+        curr_stat.split_secs = split_secs;
+        curr_stat.asplit_mins = asplit_minutes;
+        curr_stat.asplit_secs = asplit_secs;
       }
       
-      // // calc Watts
-      // power_ratio_vector[position2] = power_elapsed/(stroke_elapsed + DELTA);
-      // power_ratio_vector_avg = weighted_avg(power_ratio_vector, &position2);
+      // calc Watts
+      power_ratio_vector[position2] = power_elapsed/(stroke_elapsed + DELTA);
+      power_ratio_vector_avg = weighted_avg(power_ratio_vector, &position2);
 
       power_vector[position2]= (J_power + K_power)/(stroke_elapsed + DELTA);
       if (power_vector[position2] > 999.0) {
@@ -398,6 +382,9 @@ Y88b 888 Y8b.     Y88b.    888  888 Y88b 888
       
       stroke_vector[position2]= stroke_elapsed;
       stroke_vector_avg = weighted_avg(stroke_vector,&position2);
+
+      curr_stat.watts = power_vector_avg;
+      curr_stat.spm   = 60.0/(stroke_vector_avg+DELTA);
 
       powergraph_plot(power_vector_avg, (60.0/(stroke_vector_avg+DELTA)));
      
