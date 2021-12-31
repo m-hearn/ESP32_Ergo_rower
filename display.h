@@ -46,7 +46,7 @@ void powergraph_setup(){
   // Populate the palette table, table must have 16 entries
   pg_palette[0]  = TFT_BLACK;
   pg_palette[1]  = TFT_ORANGE;
-  pg_palette[2]  = TFT_DARKGREEN;
+  pg_palette[2]  = TFT_YELLOW;
   pg_palette[3]  = TFT_DARKCYAN;
   pg_palette[4]  = TFT_MAROON;
   pg_palette[5]  = TFT_PURPLE;
@@ -71,26 +71,26 @@ void powergraph_setup(){
 void powergraph_draw(){
   // if (powergraph.draw)
   if (pg_dirty)
-    pg_sprite.pushSprite(115,230);
+    pg_sprite.pushSprite(5,230);
   pg_dirty = 0;
 }
 
 void powergraph_plot(double watts, double spm){
   int dw, ds;
 
-  dw = 70- (int) watts*70.0/400.0;
-  ds = 70- (int) spm  *70.0/60.0;
+  dw = 72- (int) watts*72.0/440.0;
+  ds = 72- (int) (spm-15)*72.0/45.0;
   // watts
   if (dw > 2 && dw < 73) {
-    pg_sprite.drawPixel(2, dw-1, 12);
-    pg_sprite.drawPixel(2, dw, 12);
-    pg_sprite.drawPixel(2, dw+1, 12);
+    pg_sprite.drawPixel(197, dw-1, 1);
+    pg_sprite.drawPixel(197, dw  , 1);
+    pg_sprite.drawPixel(197, dw+1, 1);
   }
   // spm
   if (ds > 2 && ds < 73) {
-    pg_sprite.drawPixel(2, ds-1, 9);
-    pg_sprite.drawPixel(2, ds, 9);
-    pg_sprite.drawPixel(2, ds+1, 9);
+    pg_sprite.drawPixel(197, ds-1, 2);
+    pg_sprite.drawPixel(197, ds  , 2);
+    pg_sprite.drawPixel(197, ds+1, 2);
   }
   pg_dirty = 1;
 }
@@ -99,8 +99,8 @@ void powergraph_scroll(){
   // update called every 0.1
   if (++pg_scroll_int >= 20) {
     pg_scroll_int = 0;
-    pg_sprite.scroll(1,0);
-    pg_sprite.drawFastVLine(2,1,73,0);
+    pg_sprite.scroll(-1,0);
+    pg_sprite.drawFastVLine(197,1,73,0);
     pg_dirty = 1;
   }
 }
@@ -117,9 +117,9 @@ void powergraph_scroll(){
 #define X_DIST 170
 #define Y_DIST 170
 #define X_ASPLIT 210
-#define X_WATT 10
+#define X_WATT 210
 #define Y_WATT 230
-#define X_SM 10
+#define X_SM 210
 #define Y_SM 275
 
 #define X_TIME 10
@@ -261,7 +261,6 @@ void draw_elements(){
         spr_chr.setTextColor(TFT_WHITE,TFT_BLACK);
         if ((ch>='0')&&(ch<='9'))   spr_chr.drawNumber(ch-'0', 0, 0);
         else if (ch == ':')         spr_chr.drawString(":", 0, 0);
-        // spr.pushSprite(disp_loc[i][0], disp_loc[i][1], TFT_ORANGE);  
         spr_chr.pushSprite(disp_loc[i][0], disp_loc[i][1],TFT_ORANGE);  
         spr_chr.deleteSprite();
       }
@@ -275,12 +274,12 @@ void draw_elements(){
 
   if(rowing) {
     if (force_line == 0) {
-      dy= 250/FORCE_SCALE_Y;
-      dl=force_graph_maxy/FORCE_SCALE_Y;
+      dy= 250/force_scale_y;
+      dl=force_graph_maxy/force_scale_y;
       if (dl> draw_force_h) dl-=dy;
       for (; dl>=dy; dl-= dy) {
-        tft.drawLine(draw_force_x, draw_force_y-dl-1,   draw_force_x+GRAPHX_MAX, draw_force_y-dl-1, GRAPH_GRID);
         tft.fillRect(draw_force_x, draw_force_y-dl,                1+GRAPHX_MAX, dy               , TFT_BLACK);
+        tft.drawLine(draw_force_x, draw_force_y-dl-1,   draw_force_x+GRAPHX_MAX, draw_force_y-dl-1, GRAPH_GRID);
       }
       force_line++;
     }
@@ -290,8 +289,8 @@ void draw_elements(){
          && (force_graph[force_line][1]   >10)
          && (force_graph[force_line+1][1] >10)
          ){
-        tft.drawLine(draw_force_x+(int)(force_graph[force_line+0][0]*FORCE_SCALE_X)-GRAPHX_MIN, draw_force_y-(int)(force_graph[force_line+0][1]/FORCE_SCALE_Y),
-                      draw_force_x+(int)(force_graph[force_line+1][0]*FORCE_SCALE_X)-GRAPHX_MIN, draw_force_y-(int)(force_graph[force_line+1][1]/FORCE_SCALE_Y), GRAPH_LINE);
+        tft.drawLine(draw_force_x+(int)(force_graph[force_line+0][0]*FORCE_SCALE_X)-GRAPHX_MIN, draw_force_y-(int)(force_graph[force_line+0][1]/force_scale_y),
+                      draw_force_x+(int)(force_graph[force_line+1][0]*FORCE_SCALE_X)-GRAPHX_MIN, draw_force_y-(int)(force_graph[force_line+1][1]/force_scale_y), GRAPH_LINE);
       }
       force_line++;
     }
