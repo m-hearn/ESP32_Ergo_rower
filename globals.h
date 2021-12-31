@@ -89,7 +89,7 @@ static int draw_force_x = 50;
 static int draw_force_y = 465;
 static int draw_force_h = 150;
 static int force_graph_maxy = 1000;
-static double FORCE_SCALE_Y = 10.0;
+static double force_scale_y = 10.0;
 
 //  debugable display!        Time   str splt  dist aspl watts
 char stats_curr[36];  // char "H:MI:SS SM m:ss 12345 A:5m WWW"
