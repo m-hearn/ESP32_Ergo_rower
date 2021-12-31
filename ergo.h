@@ -107,7 +107,7 @@ void setup_rower(){
   row_buff_head = 0;
   row_buff_tail = 0;
 
-  FORCE_SCALE_Y = force_graph_maxy / (double) draw_force_h;
+  force_scale_y = force_graph_maxy / (double) draw_force_h;
   
   #ifdef ARDUINO
     // attachInterrupt(ROWER_PIN, Interrupt_pin_rower, RISING);
@@ -136,9 +136,9 @@ void start_rower(){
     speed_vector[j]= ZERO;
     power_ratio_vector[j]= ZERO;
     K_damp_estimator_vector[j]= K_DAMP_START;
-    stroke_vector[j]= 2.0;  // start off assuming 30 spm
+    stroke_vector[j]= 3.5;  // start off assuming 25 spm
   }
-  stroke_vector_avg = 2.0;
+  stroke_vector_avg = 3.5;
 
   Wd_screen= 0;
   Wdd_screen= 0;
@@ -313,7 +313,7 @@ void calc_rower_stroke() {
         } else force_maxh = 0;
       } 
       // printf("%f %d\n", force_max, force_graph_maxy);
-      FORCE_SCALE_Y = force_graph_maxy / (double) draw_force_h;
+      force_scale_y = force_graph_maxy / (double) draw_force_h;
       force_max = ZERO;     
     }
   }
