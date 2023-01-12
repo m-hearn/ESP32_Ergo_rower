@@ -1,33 +1,16 @@
 
-/* 
-// 40mhz
-// TFT_eSPI library test!
-// Benchmark                Time (microseconds)
-// Screen fill              502035
-// Text                     26568
-// Lines                    246273
-// Horiz/Vert Lines         42505
-// Rectangles (outline)     23706
-// Rectangles (filled)      1212994
-// Circles (filled)         144902
-// Circles (outline)        93021
-// Triangles (outline)      48744
-// Triangles (filled)       410212
-// Rounded rects (outline)  45503
-// Rounded rects (filled)   1228545
-// Done!
-
-// https://www.messletters.com/en/big-text/  thick
-*/
-
 #include "SPI.h"
 #include "TFT_eSPI.h"
 
 
+
 void setup_rower();
-void calc_rower_stroke();
+void calc_rower_stroke(unsigned long t_intr);
 void start_rower();
+void ready_rower();
 void stop_rower();
+void process_interrupts();
+void push_interrupt(unsigned long t_intr);
 
 void setup_display(); // setup - called from main setup
 void handle_display( void *param); // display and touch handler
@@ -36,8 +19,16 @@ void touch_events(); // read and process touch events
 
 
 #include "globals.h"
+
+#include "erg_debug.h"
+
+#ifdef BLE
+#include "ble.h"
+#endif
+
 #include "ergo.h"
 #include "display.h"
+
 
 /*
                                                                                     
@@ -163,9 +154,11 @@ w8ww .d8b. 8   8 .d8b 8d8b.    .d88b Yb  dP .d88b 8d8b. w8ww d88b
 
 #define DEBUG_PIN 12
 
+unsigned long fake_intr = 0;
+int pErg_sim = 0;
 
 void setup() {
-  // TaskHandle_t Time_t_handle;
+// TaskHandle_t Time_t_handle;
   
 #ifdef ARDUINO
   pinMode(DEBUG_PIN, INPUT_PULLUP);
@@ -174,77 +167,102 @@ void setup() {
 
   Serial.begin(250000);
   while (!Serial);
-
-  DEBUG= !(digitalRead(DEBUG_PIN));
-  // DEBUG = 1;
   
   if(!DEBUG)
-    Serial.printf("T,S#,St,dt,R,W,Wd,Wdd,C,damp,SPM,Watts,D,force\n");  
-
+    Serial.printf("T,S#,St,dt,R,W,Wd,Wdd,C,damp,SPM,Watts,D,force\n");
+  
   //setup_storage();
   
   // xTaskCreatePinnedToCore(setup_time, "time", 1000, NULL, 0, &Time_t_handle, DISPLAY_CPU);
 
+#ifdef BLE
+  setup_BLE();
+#endif
   setup_display();
-
   setup_rower();
+
+  // auto ready for rowing to begin
+  ready_rower();
+
+
+  t_clock = millis();
+  fake_intr = t_clock + erg_sim[0];
 }
 
-int debug_index = 0;
 
+
+int tic = 0;
 
 void loop(void) {
   t_real = millis();
 
-  if ((DEBUG) && (t_real >= erg_sim[debug_index])) {
-    row_buff_head = (row_buff_head+1)&ROW_BUFF_SIZE;
-    row_buffer[row_buff_head] = erg_sim[debug_index++];
+  if ((DEBUG) && (t_real >= fake_intr)) {
+    push_interrupt(fake_intr);
+    fake_intr += erg_sim[pErg_sim++];
+    if (erg_sim[pErg_sim]==999999)
+      pErg_sim=0;
   }
 
-  while (row_buff_head != row_buff_tail) {
-    row_buff_tail = (row_buff_tail+1)&ROW_BUFF_SIZE; // move the pointer on.
+  process_interrupts();
 
-    if (!rowing || paused) {  // not started or paused
-      t_last=t_real;          // set a recent start time for strokes etc.  (assume pause only occurs in decay)
-      if (!rowing) start_rower(); // setup rower state and begin
-      else paused = 0;
-      t_clock = t_real;
-      t_power = t_last;
-      // don't set a next stroke or calculate - this was the first interrupt that got us here.
-    } else { // already rowing - 
-      t_now = row_buffer[row_buff_tail];
-      calc_rower_stroke(); // for t_now  (compare against t_last)
-    }
-  }
+  // Stopped for > 5 seconds - assume stop rowing - measure from power - as stroke only ends on next pull
+  if (rowing) check_slow_down(t_real);
 
-  delay(10);
-
-  if ((t_real - t_power) > 5 Seconds) { paused = rowing;}  // can't be paused and rowing!
-
-  if (rowing && !paused) {
-    // 27 2:14 2:13 252   230 0:01:01.1
-    //  123456789012345678901234567890
-    if ((t_real - t_clock) > 0.1 Seconds) {
-      t_clock += 100;
-      row_elaspsed+=0.1;
-      row_secs    +=0.1;
-      powergraph_scroll();
-
-      if (row_secs >= 60) {
-        stats_disp[27]='X'; // make the display think that drawing a : is necessary - because it's different
-        row_secs-=60.0;
-        if (++row_minutes > 60) {
-          stats_disp[24]='X';
-          row_hours++;
-          row_minutes -= 60;
-          if (row_hours > 9) row_hours = 0;
-          curr_stat.row_mins = row_minutes;
-          curr_stat.row_hrs = row_hours;
-        }
-      }
-      sprintf(stats_curr+17,"%5.0f %1d:%02d:%04.1f", distance_rowed, row_hours, row_minutes, row_secs);
-      sprintf(curr_stat.distance,"%5.0f", distance_rowed);
-      sprintf(curr_stat.row_secs,"%04.1f", row_secs);
-    }
-  }
+  delay(50); // avoid busy wait?!
 };
+
+
+
+/* 
+// 40mhz
+// TFT_eSPI library test!
+// Benchmark                Time (microseconds)
+// Screen fill              502035
+// Text                     26568
+// Lines                    246273
+// Horiz/Vert Lines         42505
+// Rectangles (outline)     23706
+// Rectangles (filled)      1212994
+// Circles (filled)         144902
+// Circles (outline)        93021
+// Triangles (outline)      48744
+// Triangles (filled)       410212
+// Rounded rects (outline)  45503
+// Rounded rects (filled)   1228545
+// Done!
+
+// https://www.messletters.com/en/big-text/  thick
+   //#-DTFT_INVERSION_ON=1 #  turn on for the 3" 320x240 version in platformio.ini
+*/
+
+
+//   if ((t_real - t_clock) >= 0.1 Seconds) {
+//     t_clock += 100;
+//     if (++tic == 10) tic=0;
+    
+//     if (rowing) {
+//       curr_stat.elapsed+=0.1;
+
+//       if (tic==0) {
+// #ifdef BLE
+//         send_BLE();
+// #endif
+//         powergraph_plot(curr_stat.watts, curr_stat.spm);
+//         powergraph_scroll();
+//       }
+
+//       row_secs         +=0.1;
+//       if (row_secs >= 60) {
+//         stats_disp[27]='X'; // make the display think that drawing a : is necessary - because it's different
+//         row_secs-=60.0;
+//         if (++row_minutes > 60) {
+//           stats_disp[24]='X';
+//           row_hours++;
+//           row_minutes -= 60;
+//           if (row_hours > 9)
+//             row_hours = 0;
+//         }
+//       }
+//       sprintf(stats_curr+17,"%5.0f %1d:%02d:%04.1f", curr_stat.distance, row_hours, row_minutes, row_secs);
+//     }
+//   }

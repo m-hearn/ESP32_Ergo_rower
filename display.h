@@ -28,12 +28,28 @@
 #define VERD22W 30
 #define VERD36W 55
 
+#define GRAPH_GRID TFT_DARKGREY  
+#define GRAPH_AXIS TFT_BLUE
+#define GRAPH_LINE TFT_CYAN
+
+#define FORCE_SCALE_X 250.0
+
+#define X_SPLIT 10
+#define X_DIST 170
+#define Y_DIST 170
+#define X_ASPLIT 210
+#define X_WATT 210
+#define Y_WATT 210
+#define X_SM 210
+#define Y_SM 255
+#define PG_Y 210
 
 
-#define CALIBRATION_FILE "/TouchCalData2"
+#define CALIBRATION_FILE "/TouchCalData"
 TaskHandle_t Display_t_handle;
+void core0_handler(void *param);
 
-TFT_eSPI tft = TFT_eSPI();
+TFT_eSPI tft = TFT_eSPI((int16_t) 240, (int16_t) 320);
 
 TFT_eSprite spr_chr = TFT_eSprite(&tft);
 
@@ -71,7 +87,7 @@ void powergraph_setup(){
 void powergraph_draw(){
   // if (powergraph.draw)
   if (pg_dirty)
-    pg_sprite.pushSprite(5,230);
+    pg_sprite.pushSprite(5,PG_Y);
   pg_dirty = 0;
 }
 
@@ -97,7 +113,7 @@ void powergraph_plot(double watts, double spm){
 
 void powergraph_scroll(){
   // update called every 0.1
-  if (++pg_scroll_int >= 20) {
+  if (pg_scroll_int++) {
     pg_scroll_int = 0;
     pg_sprite.scroll(-1,0);
     pg_sprite.drawFastVLine(197,1,73,0);
@@ -107,37 +123,77 @@ void powergraph_scroll(){
 
 
 
-#define GRAPH_GRID TFT_DARKGREY  
-#define GRAPH_AXIS TFT_BLUE
-#define GRAPH_LINE TFT_CYAN
-
-#define FORCE_SCALE_X 250.0
-
-#define X_SPLIT 10
-#define X_DIST 170
-#define Y_DIST 170
-#define X_ASPLIT 210
-#define X_WATT 210
-#define Y_WATT 230
-#define X_SM 210
-#define Y_SM 275
-
 #define X_TIME 10
+
+static int FG_X = 50;
+static int FG_Y = 465;
+static int FG_H = 160;
+static int FG_W = 248;
+static int force_graph_maxy = 2400;
+static double force_scale_y = 10.0;
+
+void forcegraph_setup() {
+
+  tft.drawLine(FG_X-1,FG_Y+1,FG_X+248,FG_Y+1,GRAPH_AXIS);
+  tft.drawLine(FG_X-1,FG_Y+1,FG_X-1,  FG_Y- FG_H,GRAPH_AXIS);
+
+  tft.setTextColor(TFT_WHITE, TFT_BLACK); 
+  tft.setTextSize(2);
+
+  tft.setCursor(18,360);
+  tft.printf("Kg");
+
+  force_scale_y = force_graph_maxy / (double) FG_H;
+  force_max = ZERO;   
+
+}
+
+
+//   480 total
+//   <space 60> | <graphx_min 17>  300 wide (-17)  |   260+17
+#define GRAPHX_MIN 17
+#define GRAPHX_MAX 243
+
+int last_graphp = 1;
+
+
+void forcegraph_draw(){
+
+  if(!rowing) return;
+
+  if(force_line == -1) {
+    // starting new stroke
+    force_line = 0;
+    return;
+  }
+  
+  while (force_line < force_ptr) {
+    if (force_graph[force_line][1]> force_graph_maxy) force_graph[force_line][1] = force_graph_maxy;
+    if (  (force_graph[force_line][1]   >0)  && (force_graph[force_line+1][1] >0) ){
+      tft.drawLine(FG_X+(force_line  )*10, FG_Y-(int)(force_graph[force_line+0][1]/force_scale_y),
+                   FG_X+(force_line+1)*10, FG_Y-(int)(force_graph[force_line+1][1]/force_scale_y), TFT_YELLOW);
+    }
+    force_line++;last_graphp = force_line;
+  }
+};
+
 
 void setup_display(){
   // int c;
   tft.init();
 
+
+  tft.setRotation(2);
   tft.fillScreen(TFT_BLACK);
   tft.setTextColor(TFT_WHITE, TFT_BLACK); 
   tft.setTextSize(2);
-  tft.setRotation(2);
-
-  powergraph_setup();
 
   //touch_calibrate();
+ 
+  powergraph_setup();
+  forcegraph_setup();
 
-  xTaskCreatePinnedToCore(handle_display, "Display", 10000, NULL, 0, &Display_t_handle, DISPLAY_CPU);
+  xTaskCreatePinnedToCore(core0_handler, "Display", 10000, NULL, 0, &Display_t_handle, DISPLAY_CPU);
 
   tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK); 
   tft.setTextSize(2);
@@ -153,15 +209,11 @@ void setup_display(){
   tft.printf("Avg Splt");
   tft.setCursor(X_DIST+133,Y_DIST+14);
   tft.print('m');
-  tft.setCursor(90,Y_WATT + 13);
+  tft.setCursor(X_WATT+90,Y_WATT + 13);
   tft.print('W');
-  tft.setCursor(18,360);
-  tft.printf("Kg");
 
 
 
-  tft.drawLine(draw_force_x-1,draw_force_y+1,draw_force_x+248,draw_force_y+1,GRAPH_AXIS);
-  tft.drawLine(draw_force_x-1,draw_force_y- draw_force_h,draw_force_x-1,draw_force_y+1,GRAPH_AXIS);
 
   sprintf(stats_curr,"%2.0f %1d.%02.0f %1d.%02.0f %3.0f %5.0f %1d:%02d:%03.1f",
                        0.0,  0,   0.0,  0,   0.0,  0.0,  0.0,  0,  0,  0.0);
@@ -170,13 +222,7 @@ void setup_display(){
   tft.setTextColor(TFT_WHITE, TFT_BLACK); 
 };
 
-void handle_display(void *param){
-  while(true){
-    delay(5);
-    draw_elements();
-    //touch_events();
-  }
-};
+
 
 
 static int disp_loc[][4] = {
@@ -215,22 +261,10 @@ static int disp_loc[][4] = {
 };
 
 // char "SM m:ss A:5m WWW 12345 H:MI:SS"
-/*
-   TIME    Dista
-   -------------
-   Split    Asplit
-   -------------
-   Watt    graph   
-   -------------
-   force graph SM
-   ------------- 
-
-*/
-
 
 void draw_elements(){
   int i; int c; int ch=0;
-  double dy,dl;
+
 
   for (i=0, c=0; (i<= 32) && (c<4); i++) {
 
@@ -266,42 +300,55 @@ void draw_elements(){
       }
     }
   }
+}
 
-//   480 total
-//   <space 60> | <graphx_min 17>  300 wide (-17)  |   260+17
-#define GRAPHX_MIN 17
-#define GRAPHX_MAX 243
 
-  if(rowing) {
-    if (force_line == 0) {
-      dy= 250/force_scale_y;
-      dl=force_graph_maxy/force_scale_y;
-      if (dl> draw_force_h) dl-=dy;
-      for (; dl>=dy; dl-= dy) {
-        tft.fillRect(draw_force_x, draw_force_y-dl,                1+GRAPHX_MAX, dy               , TFT_BLACK);
-        tft.drawLine(draw_force_x, draw_force_y-dl-1,   draw_force_x+GRAPHX_MAX, draw_force_y-dl-1, GRAPH_GRID);
+void core0_handler(void *param){
+  unsigned long t_real, t_last;
+  int tic = 0;
+
+  t_last = millis();
+
+  while(true){
+    t_real = millis();
+    delay(5);
+    draw_elements();
+    forcegraph_draw();
+    //touch_events();
+
+    if ((t_real - t_last) >= 0.1 Seconds) {
+      t_last += 100;
+      if (++tic == 10) tic=0;
+    
+      if (rowing) {
+        curr_stat.elapsed+=0.1;
+
+        if (tic==0) {
+#ifdef BLE
+          send_BLE();
+#endif
+          powergraph_plot(curr_stat.watts, curr_stat.spm);
+          powergraph_scroll();
+          powergraph_draw();
+        }
+
+        row_secs         +=0.1;
+        if (row_secs >= 60) {
+          stats_disp[27]='X'; // make the display think that drawing a : is necessary - because it's different
+          row_secs-=60.0;
+          if (++row_minutes > 60) {
+            stats_disp[24]='X';
+            row_hours++;
+            row_minutes -= 60;
+            if (row_hours > 9)
+              row_hours = 0;
+          }
+        }
+        sprintf(stats_curr+17,"%5.0f %1d:%02d:%04.1f", curr_stat.distance, row_hours, row_minutes, row_secs);
       }
-      force_line++;
     }
-    while (force_line < force_ptr) {
-      if (  (force_graph[force_line][0]   > (GRAPHX_MIN/FORCE_SCALE_X)) 
-         && (force_graph[force_line+1][0] <((GRAPHX_MAX+GRAPHX_MIN)/FORCE_SCALE_X))
-         && (force_graph[force_line][1]   >10)
-         && (force_graph[force_line+1][1] >10)
-         ){
-        tft.drawLine(draw_force_x+(int)(force_graph[force_line+0][0]*FORCE_SCALE_X)-GRAPHX_MIN, draw_force_y-(int)(force_graph[force_line+0][1]/force_scale_y),
-                      draw_force_x+(int)(force_graph[force_line+1][0]*FORCE_SCALE_X)-GRAPHX_MIN, draw_force_y-(int)(force_graph[force_line+1][1]/force_scale_y), GRAPH_LINE);
-      }
-      force_line++;
-    }
-    powergraph_draw();
-  } // rowing
-
-
-
-
+  }
 };
-
 
 
 //                   888 d8b 888                       888             
@@ -363,3 +410,45 @@ void draw_elements(){
 //       // Delete if we want to re-calibrate
 //       SPIFFS.remove(CALIBRATION_FILE);
 // };
+
+
+
+
+// redundant code
+
+  // if(!rowing && last_graphp) {
+  //   if (force_line == 0) {
+  //     dy= 250/force_scale_y;
+  //     dl=force_graph_maxy/force_scale_y;
+  //     if (dl> FG_H) dl-=dy;
+  //     for (; dl>=dy; dl-= dy) {
+  //       tft.fillRect(FG_X, FG_Y-dl,                1+GRAPHX_MAX, dy               , TFT_BLACK);
+  //       tft.drawLine(FG_X, FG_Y-dl-1,   FG_X+GRAPHX_MAX, FG_Y-dl-1, GRAPH_GRID);
+  //     }
+  //     force_line++;
+  //   }
+  // }
+
+// if (force_line == 0)
+    //   if (last_graphp>0) {
+    //     for (; force_line <= last_graphp; force_line++)
+    //       if (  (force_graph[force_line][1]   >10) && (force_graph[force_line+1][1] >10))
+    //         tft.drawLine(FG_X+(force_line  )*10, FG_Y-(int)(force_graph[force_line+0][1]/force_scale_y),
+    //                      FG_X+(force_line+1)*10, FG_Y-(int)(force_graph[force_line+1][1]/force_scale_y), TFT_DARKGREY);
+          
+    //   force_line=1;
+    // }
+
+// force / time graph
+    // while (force_line < force_ptr) {
+    //   if (  (force_graph[force_line][0]   > (GRAPHX_MIN/FORCE_SCALE_X)) 
+    //      && (force_graph[force_line+1][0] <((GRAPHX_MAX+GRAPHX_MIN)/FORCE_SCALE_X))
+    //      && (force_graph[force_line][1]   >10)
+    //      && (force_graph[force_line+1][1] >10)
+    //      ){
+    //     tft.drawLine(FG_X+(int)(force_graph[force_line+0][0]*FORCE_SCALE_X)-GRAPHX_MIN, FG_Y-(int)(force_graph[force_line+0][1]/force_scale_y),
+    //                   FG_X+(int)(force_graph[force_line+1][0]*FORCE_SCALE_X)-GRAPHX_MIN, FG_Y-(int)(force_graph[force_line+1][1]/force_scale_y), GRAPH_LINE);
+    //   }
+    //   force_line++;
+    // }
+    

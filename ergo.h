@@ -1,17 +1,13 @@
 #include "globals.h"
-#include "erg_debug.h"
+
 
 #ifndef ARDUINO
   #include <math.h>
   #include <stdio.h>
 #else
-  #define ROWER_PIN 36
-  void IRAM_ATTR Interrupt_pin_rower();
+  #define ROWER_PIN 35
   void IRAM_ATTR Interrupt_pin_rower_change();
 #endif
-
-extern void powergraph_plot(double watts, double spm);
-
 
 #define W_DOT_DOT_MIN -40.0
 #define W_DOT_DOT_MAX  35.0
@@ -35,8 +31,85 @@ extern void powergraph_plot(double watts, double spm);
 // http://eodg.atm.ox.ac.uk/user/dudhia/rowing/physics/ergometer.html
 
 
+// 0xFF to support bit operated wrapping
+#define  ROW_BUFF_SIZE 255
+volatile unsigned long row_buffer[ROW_BUFF_SIZE+1];
+volatile int row_buff_head;
+int row_buff_tail;
 
 
+/*number of constants for averaging*/
+#define MAX_N	5
+#define DELTA 0.00001
+#define ZERO 0.0
+
+#ifndef PI
+#define PI 3.1415926535897932384626433832795
+#endif
+
+// tricky - as moment of inertia changes as the water moves outwards.  Maxes at .34, and min around .26
+						//look at documentation for ways to measure it. Its easy to do.
+
+#define K_DAMP_START 0.022  // K_damp / J_moment
+#define J_moment 0.9 //kg*m^2 - set this to the moment of inertia of your flywheel. 
+static double magic_factor = 2.8; //a heuristic constant people use to relate revs to distance-rowed
+
+// static double d_omega_div_omega2 = K_DAMP_START;//erg_constant - to get this for your erg:
+static double K_damp; //related by J_moment*omega_dot = K_damp * omega^2 during non-power part of stroke
+
+
+static double cal_factor; //distance per rev ... calculated later
+static double volatile distance_rowed = ZERO;
+
+// static long volatile chop_counter;	
+
+static double stroke_vector_avg;
+static double power_vector_avg;
+static double calorie_tot = ZERO;
+static double K_power = ZERO;
+static double J_power = ZERO;
+static double K_damp_estimator_vector_avg;
+
+static double K_damp_estimator = ZERO;
+static double power_ratio_vector_avg = ZERO;
+
+static double stroke_elapsed = ZERO;
+static double power_elapsed = ZERO;
+static double row_elaspsed = ZERO;
+static double tmp_elapsed = ZERO;
+
+static double stroke_distance = ZERO;
+static double stroke_distance_old = ZERO;
+
+static double W_v[2];
+static double Wd_v[2];
+static double Wdd_v = ZERO;
+static double Wdd_v1 = ZERO;
+
+static double current_dt = ZERO;
+static double last_dt  = ZERO;
+// static double omega_vector_avg = ZERO;
+// static double omega_vector_avg_curr = 0.0;
+
+static int Wd_screen = 0;
+static int Wdd_screen = 0;
+static int power_stroke_screen[2];
+
+unsigned long t_power, t_stroke;  // start time of power stroke and stroke
+unsigned long t_last;  // timestamps of interrupt ticks in the buffer
+unsigned long t_clock, t_real;  // clock counters
+
+int position1 = 0, position2 = 0;
+
+double stroke_vector[MAX_N];
+double power_vector[MAX_N];
+double power_ratio_vector[MAX_N];
+double K_damp_estimator_vector[MAX_N];
+double speed_vector[MAX_N];
+
+int stroke_l;
+
+int slow_down_buffer = 1; // when slowing down, only apply after delay and do in chunks.
 
 
 // https://www.concept2.com/indoor-rowers/training/calculators/watts-calculator
@@ -71,7 +144,10 @@ static int    force_maxh;
 unsigned long last_interrupt;
 volatile int interrupt_count = 0;
 
-#define DEBOUNCE_INT 2
+// 2ms is probably good for a circuit bounce,
+// but we'll try 24 to beat some other spikes
+// #define DEBOUNCE_INT 2
+#define DEBOUNCE_INT 24
 void IRAM_ATTR Interrupt_pin_rower_change()
 {
   unsigned long now = millis();
@@ -89,6 +165,11 @@ void IRAM_ATTR Interrupt_pin_rower_change()
 };
 #endif
 
+void push_interrupt(unsigned long intr) {
+  row_buff_head = (row_buff_head+1)&ROW_BUFF_SIZE;
+  row_buffer[row_buff_head] = intr;
+}
+
 //  ######  ######## ######## ##     ## ########  
 // ##    ## ##          ##    ##     ## ##     ## 
 // ##       ##          ##    ##     ## ##     ## 
@@ -98,38 +179,19 @@ void IRAM_ATTR Interrupt_pin_rower_change()
 //  ######  ########    ##     #######  ##        
 
 
-void setup_rower(){
+
+
+void setup_rower() {
+   int j;
 
 #ifdef ARDUINO
   pinMode(ROWER_PIN, INPUT);
 #endif
 
-  row_buff_head = 0;
-  row_buff_tail = 0;
-
-  force_scale_y = force_graph_maxy / (double) draw_force_h;
-  
-  #ifdef ARDUINO
-    // attachInterrupt(ROWER_PIN, Interrupt_pin_rower, RISING);
-    attachInterrupt(ROWER_PIN, Interrupt_pin_rower_change, CHANGE);
-  #endif
-};
-
-//  ######  ########    ###    ########  ######## 
-// ##    ##    ##      ## ##   ##     ##    ##    
-// ##          ##     ##   ##  ##     ##    ##    
-//  ######     ##    ##     ## ########     ##    
-//       ##    ##    ######### ##   ##      ##    
-// ##    ##    ##    ##     ## ##    ##     ##    
-//  ######     ##    ##     ## ##     ##    ##  
-
-void start_rower(){
-  int j;
-
   stroke = 0;
   
   calorie_tot = ZERO;
-  distance_rowed = ZERO;
+  curr_stat.distance = ZERO;
 
   for (j = 0; j<MAX_N; j++) {	
     power_vector[j]= ZERO;
@@ -156,30 +218,58 @@ void start_rower(){
 	
 	stroke_elapsed = ZERO;
 	power_elapsed = ZERO;
-  row_elaspsed = ZERO;
 
   asplit_minutes = 0;  asplit_secs = 0;
    split_minutes = 0;   split_secs = 0;
 
-   force_ptr = 0;
-   force_graph[0][0] = ZERO;
-   force_graph[0][1] = ZERO;
-   force = ZERO;
-   force_max = ZERO;
-   force_maxh = 0;
+  force_ptr = 0;
+  force_graph[0][0] = ZERO;
+  force_graph[0][1] = ZERO;
+  force = ZERO;
+  force_max = ZERO;
+  force_maxh = 0;
 
   row_hours = 0; row_minutes = 0; row_secs = 0.0;
+  
+  row_buff_head = 0;
+  row_buff_tail = 0;
 
-  // reset to default
- 	K_damp = J_moment*d_omega_div_omega2; //= 0.0005 Nms^2 
+}
 
+void ready_rower(){
+  // rower is reset and put into reading state
+
+  #ifdef ARDUINO
+    attachInterrupt(ROWER_PIN, Interrupt_pin_rower_change, CHANGE);
+  #endif
+
+  rowing = 0;
+}
+
+//  ######  ########    ###    ########  ######## 
+// ##    ##    ##      ## ##   ##     ##    ##    
+// ##          ##     ##   ##  ##     ##    ##    
+//  ######     ##    ##     ## ########     ##    
+//       ##    ##    ######### ##   ##      ##    
+// ##    ##    ##    ##     ## ##    ##     ##    
+//  ######     ##    ##     ## ##     ##    ##  
+
+void start_rower(unsigned long now){
+  int j;
+  t_last   = now;
+  t_stroke = now;
+  t_power  = now;
+
+  // reset to defaults -- assume water is stationary 
+  // MRH - maybe slow down a tick each time
+  for (j = 0; j<MAX_N; j++) {	
+    K_damp_estimator_vector[j]= K_DAMP_START;
+  }
+ 	K_damp = J_moment*K_DAMP_START;
 	cal_factor = RADSperTICK*pow((K_damp/magic_factor), 1.0/3.0); //      distance per rev = 0.3532
-
-  t_stroke = t_last;
-  t_power = t_last;
-
+  
+  stroke=0;
   rowing = 1;
-  paused = 0;
 };
 
 //  ######  ########  #######  ########  
@@ -214,6 +304,8 @@ int j;
 return temp_sum;
 }
 
+
+
 //  ######     ###    ##        ######      ######  ######## ########   #######  ##    ## ######## 
 // ##    ##   ## ##   ##       ##    ##    ##    ##    ##    ##     ## ##     ## ##   ##  ##       
 // ##        ##   ##  ##       ##          ##          ##    ##     ## ##     ## ##  ##   ##       
@@ -222,12 +314,12 @@ return temp_sum;
 // ##    ## ##     ## ##       ##    ##    ##    ##    ##    ##    ##  ##     ## ##   ##  ##       
 //  ######  ##     ## ########  ######      ######     ##    ##     ##  #######  ##    ## ######## 
 
-void calc_rower_stroke() {
+void calc_rower_stroke(unsigned long t_intr) {
   /***********************************************
    calculate omegas
   ************************************************/
 
-  current_dt = (t_now - t_last) / 1000.0;
+  current_dt = (t_intr - t_last) / 1000.0;
   if (0 == current_dt) return; // also avoids DIV by 0 -- otherwise use /(current_dt+DELTA)
 
   // save last
@@ -266,6 +358,11 @@ void calc_rower_stroke() {
   ****************************************************************************************************/
   
   /*********************************************************
+   * 
+   *   t_stroke   - return -  t_power - pull -      t_stroke - return
+   *                          ^      tmp_elapsed    ^
+   *                          ^      power_elapsed  ^
+   *   ^                             stoke_elapsed  ^
   if just ended decay stroke, just started power stroke
 
 88888b.   .d88b.  888  888  888  .d88b.  888d888 
@@ -278,43 +375,44 @@ void calc_rower_stroke() {
 888 
   **********************************************************/
   if ((power_stroke_screen[0] ==1) && (power_stroke_screen[1] ==0)) {
-    if ((t_now - t_stroke) < MIN_RETURN) {  // put back into decay, ended too soon.
+    if ((t_intr - t_stroke) < MIN_RETURN) {  // put back into decay, ended too soon.
       power_stroke_screen[0] = 0;
     } else {
       //start clock1 = power timer
-      t_power = t_now;
+      t_power = t_intr;
 
       J_power = 0.0;
       K_power = 0.0;
       if(stroke > 1) {
         K_damp_estimator_vector[position1] = K_damp_estimator/(stroke_elapsed-power_elapsed+DELTA);
         K_damp_estimator_vector_avg = weighted_avg(K_damp_estimator_vector, &position1);
-        K_damp = J_moment*K_damp_estimator_vector_avg;
         position1 = (position1 + 1) % MAX_N;
+        K_damp = J_moment*K_damp_estimator_vector_avg;
         cal_factor = RADSperTICK*pow((K_damp/magic_factor), 1.0/3.0); //distance per tick
       }
-      stroke++; 
+      stroke++;
+      curr_stat.stroke++;
           
-      // Force display
+      // Force display - undraw?  ready for next?
       stroke_t = 0;
+      stroke_l = 0;
       force_ptr = 0; 
-      force_line = 0;
+      force_line = -1;
       // work out if graph is too small or too large,  delay shrinking 
-      if ((force_graph_maxy - force_max) < 125) {
-        force_graph_maxy+=250;
-      } else {
-        if ((force_graph_maxy - force_max) > 375) {
-          if (1 == force_maxh) {
-            force_graph_maxy-=250;
-            force_maxh = 0;
-          } else {
-            force_maxh = 1;
-          }
-        } else force_maxh = 0;
-      } 
-      // printf("%f %d\n", force_max, force_graph_maxy);
-      force_scale_y = force_graph_maxy / (double) draw_force_h;
-      force_max = ZERO;     
+      // if ((force_graph_maxy - force_max) < 125) {
+      //   force_graph_maxy+=250;
+      // } else {
+      //   if ((force_graph_maxy - force_max) > 375) {
+      //     if (1 == force_maxh) {
+      //       force_graph_maxy-=250;
+      //       force_maxh = 0;
+      //     } else {
+      //       force_maxh = 1;
+      //     }
+      //   } else force_maxh = 0;
+      // } 
+      //Serial.printf("%f %d\n", force_max, force_graph_maxy);
+  
     }
   }
   
@@ -333,37 +431,33 @@ Y88b 888 Y8b.     Y88b.    888  888 Y88b 888
                                     "Y88P"  
   **********************************************************/
   if ((power_stroke_screen[0] ==0) && (power_stroke_screen[1] ==1)) {
-    tmp_elapsed = (t_now - t_power) / 1000.0;
+    tmp_elapsed = (t_intr - t_power) / 1000.0;
     // printf("X %f,%f,%ld\n", tmp_elapsed, power_elapsed, stroke);
     if ((tmp_elapsed > MIN_PULL) || (stroke == 0)) {  // stay in Power stroke for a while, avoid a false start/stop
 
       power_elapsed = tmp_elapsed;
-      stroke_elapsed = (t_now - t_stroke) / 1000.0;
-      t_stroke = t_now;
+      stroke_elapsed = (t_intr - t_stroke) / 1000.0;
+      t_stroke = t_intr;
 
       K_damp_estimator = 0.0;
 
       // omega_vector_avg_curr = omega_vector_avg/(stroke_elapsed+DELTA);
       // omega_vector_avg = 0.0;
-      stroke_distance = distance_rowed-stroke_distance_old;
-      stroke_distance_old = distance_rowed;
+      stroke_distance = curr_stat.distance-stroke_distance_old;
+      stroke_distance_old = curr_stat.distance;
       
       speed_vector[position2] = stroke_distance/(stroke_elapsed +DELTA);
 
-      if (stroke > 4) {
-        split_secs = (int) 500.0/(weighted_avg(speed_vector, &position2) + DELTA);
-        // format split
-        split_minutes = split_secs/60;
-        split_secs -=   split_minutes*60;
+      if (stroke > 2) {
+        curr_stat.split_secs = (int) 500.0/(weighted_avg(speed_vector, &position2) + DELTA);
+        curr_stat.asplit_secs = (int) 500.0*curr_stat.elapsed/curr_stat.distance;
+        
+        // format split -- should be done in display
+        split_minutes = curr_stat.split_secs/60;
+        split_secs   =  curr_stat.split_secs -split_minutes*60;
 
-        asplit_secs = (int) 500.0*row_elaspsed/distance_rowed;
-        asplit_minutes = asplit_secs/60;
-        asplit_secs-=    asplit_minutes*60;
-
-        curr_stat.split_mins = split_minutes;
-        curr_stat.split_secs = split_secs;
-        curr_stat.asplit_mins = asplit_minutes;
-        curr_stat.asplit_secs = asplit_secs;
+        asplit_minutes = curr_stat.asplit_secs/60;
+        asplit_secs    = curr_stat.asplit_secs - asplit_minutes*60;
       }
       
       // calc Watts
@@ -382,16 +476,14 @@ Y88b 888 Y8b.     Y88b.    888  888 Y88b 888
       
       stroke_vector[position2]= stroke_elapsed;
       stroke_vector_avg = weighted_avg(stroke_vector,&position2);
+      position2 = (position2 + 1) % MAX_N;
+
+      // update row stats for graphics
 
       curr_stat.watts = power_vector_avg;
       curr_stat.spm   = 60.0/(stroke_vector_avg+DELTA);
 
-      powergraph_plot(power_vector_avg, (60.0/(stroke_vector_avg+DELTA)));
-     
-      
-      position2 = (position2 + 1) % MAX_N;
-
-      //       Time   str splt  dist aspl watts
+       //       Time   str splt  dist aspl watts
       // char "SM m:ss A:5m WWW 12345 H:MI:SS"
       //       123456789012345678901234567890
       sprintf(stats_curr,"%02d %01d:%02d %1d:%02d %3.0f %5.0f %1d:%02d:%04.1f"
@@ -399,7 +491,7 @@ Y88b 888 Y8b.     Y88b.    888  888 Y88b 888
         , split_minutes,  split_secs
         , asplit_minutes, asplit_secs
         , power_vector_avg // Watts
-        , distance_rowed
+        , curr_stat.distance
         , row_hours, row_minutes, row_secs
       );
       // printf("C %s\n", stats_curr);
@@ -418,13 +510,14 @@ Y88b 888 Y8b.     Y88b.    888  888 Y88b 888
 
     // setup force plot
     force = (force + (J_moment*Wd_v[0] + K_damp*(W_v[0]*W_v[0]) ) /(current_dt)) /2;
-    if (force > force_max) force_max = force;
-    if (force > force_graph_maxy) force = force_graph_maxy;
+    //if (force > force_max) force_max = force;
+    //if (force > force_graph_maxy) force = force_graph_maxy;
     stroke_t+=current_dt;
     if (++force_ptr < FORCE_BUF) {
       force_graph[force_ptr][0]=stroke_t;
       force_graph[force_ptr][1]=force;
     }
+    
   }
   
   /*********************************************************
@@ -435,24 +528,85 @@ Y88b 888 Y8b.     Y88b.    888  888 Y88b 888
     // omega_vector_avg = omega_vector_avg + W_v[0]*current_dt;
   }
 
-  distance_rowed += cal_factor;
-  t_last = t_now;
+  curr_stat.distance += cal_factor;
+  t_last = t_intr;
   last_dt = current_dt;
 
-  if (!DEBUG) 
+  //if (!DEBUG) 
   {
-    printf("%6ld,%4d,%4.3f,%4.3f,%d,%4.1f,% 6.1f,% 6.1f,%4.3f,%5.5f,%2.0f,%3.0f,%4.0f,%3.0f\n"
-      ,    t_now,stroke, stroke_t,current_dt
+    printf("%6ld,%4d,%4.3f,%4.3f,%d,%4.1f,% 6.1f,% 6.1f,%4.3f,%5.5f,%2.0f,%3.0f,%4.0f,%3.0f,%5.5f,%6ld,%5.5f,%5.5f\n"
+      ,    t_intr,stroke, stroke_t,current_dt
       ,                          power_stroke_screen[0]*9
       , W_v[0], Wd_v[0], Wdd_v
       , cal_factor
       ,K_damp //, K_damp_estimator);
-      , 60.0/stroke_vector_avg
+      ,stroke_vector_avg
       ,power_vector_avg
-      ,distance_rowed
-      ,force);
+      ,curr_stat.distance
+      ,force
+      ,stroke_elapsed,t_intr - t_power
+      ,J_power,K_power
+      );
   }
 };
+
+
+
+void check_slow_down(double t_real) {
+  double new_elapsed;
+
+  if (stroke <2) return;
+
+  new_elapsed = (t_real - t_power) / 1000.0;
+
+  if ((new_elapsed + slow_down_buffer) < stroke_elapsed) return;
+  
+  if (new_elapsed > 6) rowing = 0;
+
+  speed_vector[position2] = stroke_distance/(new_elapsed +DELTA);
+
+  curr_stat.split_secs = (int) 500.0/(weighted_avg(speed_vector, &position2) + DELTA);
+  curr_stat.asplit_secs = (int) 500.0*curr_stat.elapsed/curr_stat.distance;
+  
+  // format split -- should be done in display
+  split_minutes = curr_stat.split_secs/60;
+  split_secs   =  curr_stat.split_secs -split_minutes*60;
+
+  asplit_minutes = curr_stat.asplit_secs/60;
+  asplit_secs    = curr_stat.asplit_secs - asplit_minutes*60;
+  
+  // calc Watts
+  power_ratio_vector[position2] = power_elapsed/(new_elapsed + DELTA);
+  power_ratio_vector_avg = weighted_avg(power_ratio_vector, &position2);
+
+  power_vector[position2]= (J_power + K_power)/(new_elapsed + DELTA);
+  if (power_vector[position2] > 999.0) {
+    power_vector[position2] = 0.0;
+  }
+  power_vector_avg = weighted_avg(power_vector, &position2);
+
+  stroke_vector[position2]= new_elapsed;
+  stroke_vector_avg = weighted_avg(stroke_vector,&position2);
+  
+  // update row stats for graphics
+
+  curr_stat.watts = power_vector_avg;
+  curr_stat.spm   = 60.0/(stroke_vector_avg+DELTA);
+}
+
+void process_interrupts(){
+  
+  while (row_buff_head != row_buff_tail) {
+    row_buff_tail = (row_buff_tail+1)&ROW_BUFF_SIZE; // move the pointer on.
+    //Serial.print("+");
+    if (!rowing) { 
+      start_rower(row_buffer[row_buff_tail]); // start rowing calcs - first interrupt received
+      t_clock = t_real; // time from here //not winning medals for timekeeping
+    } else {
+      calc_rower_stroke(row_buffer[row_buff_tail]);
+    }
+  }
+}
 
 #ifndef ARDUINO
 int main() {
@@ -464,20 +618,20 @@ int main() {
   printf("     T,  S#,   St,   dt,R,  W,     Wd,    Wdd,    C,   damp,SM,  W,   D, Kg\n"); 
 
   t_last = erg_sim[0];
-  t_now  = t_last;
-  t_clock = t_now;
+  t_intr  = t_last;
+  t_clock = t_intr;
   start_rower();
 
-  while (t_now <= 888888) {
-    t_now = erg_sim[ind++];
-    calc_rower_stroke();
+  while (t_intr <= 888888) {
+    t_intr = erg_sim[ind++];
+    calc_rower_stroke(t_intr);
 
 
     if (rowing && !paused) {
       // 27 2:14 2:13 252   230 0:01:01.1
       //  123456789012345678901234567890
       if ((t_real - t_clock) > 0.1 Seconds) {
-        row_elaspsed+=0.1;
+        row_elapsed+=0.1;
         row_secs    +=0.1;
 
         if (row_secs >= 60) {
