@@ -22,10 +22,7 @@ void touch_events(); // read and process touch events
 
 #include "erg_debug.h"
 
-#ifdef BLE
 #include "ble.h"
-#endif
-
 #include "ergo.h"
 #include "display.h"
 
