@@ -239,7 +239,7 @@ void forcegraph_log(int force) {
 
   if (fg_stroke_len == FORCE_BUF) return;
   
-  force_y = (int) (force / force_scale_y);
+  force_y = (int) (force / (force_scale_y));
   if (force_y > FG_H) force_y = FG_H;
   if (force_y < 0)    force_y = 0;
   fga[fg_stroke][fg_stroke_len++]=FG_H - force_y;
@@ -254,11 +254,11 @@ void forcegraph_draw(){
   if(!rowing) return;
 
   if (fg_draw_len == 0) {
-    for(d = 0; d<24; d++) {
+    for(d = 0; d<FORCE_BUF-1; d++) {
       for(s = 0, ss=fg_stroke; s< FORCE_STROKES; s++, ss++) {
         if (ss == FORCE_STROKES) ss = 0;
         if(fga[ss][d]+fga[ss][d+1]< (2*FG_H))  {
-          tft.drawLine(FG_X+d*10, FG_Y+fga[ss][d], FG_X+d*10+10, FG_Y+fga[ss][d+1], fg_palette[s]);
+          tft.drawLine(FG_X+d*FG_X_SCALE, FG_Y+fga[ss][d], FG_X+d*FG_X_SCALE+FG_X_SCALE, FG_Y+fga[ss][d+1], fg_palette[s]);
         }
       }
     }
@@ -282,12 +282,12 @@ static int disp_loc[][4] = {
   { X_SM+VERD18W,Y_SM,1,1},  //M
   { 0,0,0,0},
   { X_SPLIT,75, 1,3}, //split m
-  { X_SPLIT+VERD36W-10,75, 1,3}, //:
+  { X_SPLIT+VERD36W-10,72, 1,3}, //:
   { X_SPLIT+VERD36W*2-40,75, 1,3}, //s
   { X_SPLIT+VERD36W*3-44,75, 1,3}, //s
   { 0,0,0,0},
   { X_ASPLIT,75, 1, 2}, //Asplit m
-  { X_ASPLIT+VERD22W  -4,75, 1, 2}, //:
+  { X_ASPLIT+VERD22W  -2,74, 1, 2}, //:
   { X_ASPLIT+VERD22W*2-16,75, 1, 2}, //ss
   { X_ASPLIT+VERD22W*3-16,75, 1, 2},
   {0,0,0,0},
@@ -302,10 +302,10 @@ static int disp_loc[][4] = {
   { X_DIST+VERD18W*4, Y_DIST, 1, 1},
   { 0,0,0,0},
   { X_TIME, 10, 1, 2},  //H
-  { X_TIME+VERD22W*2, 10, 1, 2},  //:
+  { X_TIME+VERD22W*2,    9, 1, 2},  //:
   { X_TIME+VERD22W*3-16, 10, 1, 2},  //M
   { X_TIME+VERD22W*4-16, 10, 1, 2},  //M
-  { X_TIME+VERD22W*5-16, 10, 1, 2},  //:
+  { X_TIME+VERD22W*5-17, 9, 1, 2},  //:
   { X_TIME+VERD22W*6-32, 10, 1, 2},  //S
   { X_TIME+VERD22W*7-32, 10, 1, 2},  //S
   { 0,0,0,0},  //.
@@ -323,6 +323,21 @@ static int disp_loc[][4] = {
 //  "Y8888  888  "Y8888  888  888  888  "Y8888  888  888  "Y888  88888P' 
                                                                       
 TFT_eSprite spr_chr = TFT_eSprite(&tft);
+
+void update_elements() {
+    //       Time   str splt  dist aspl watts
+  // char "SM m:ss A:5m WWW 12345 H:MI:SS"
+  //       123456789012345678901234567890
+  sprintf(stats_curr,"%02d %01d:%02d %1d:%02d %3.0f %5.0f %1d:%02d:%04.1f"
+    , (int) (60.0/stroke_vector_avg)
+    , split_minutes,  split_secs
+    , asplit_minutes, asplit_secs
+    , power_vector_avg // Watts
+    , curr_stat.distance
+    , row_hours, row_minutes, row_secs
+  );
+}
+
 
 void draw_elements(){
   int i; int c; int ch=0;
@@ -403,8 +418,8 @@ void setup_display(){
 
 
   sprintf(stats_curr,"%2.0f %1d.%02.0f %1d.%02.0f %3.0f %5.0f %1d:%02d:%03.1f",
-                       0.0,  0,   0.0,  0,   0.0,  0.0,  0.0,  0,  0,  0.0);
-  sprintf(stats_disp,"%2.0f %1d.%02.0f %1d.%02.0f %3.0f %5.0f %1d:%02d:%03.1f",0.0,0,0.0,0,0.0,0.0,0.0,0,0,0.0);
+                       0.0,  9,   99.0,  9,   99.0,  0.0,  0.0,  0,  0,  0.0);
+  sprintf(stats_disp,"%2.0f %1d.%02.0f %1d.%02.0f %3.0f %5.0f %1d:%02d:%03.1f",0.0,9,99.0,9,99.0,0.0,0.0,0,0,0.0);
 
   tft.setTextColor(TFT_WHITE, TFT_BLACK); 
 };
@@ -529,43 +544,3 @@ void core0_handler(void *param){
 // };
 
 
-
-
-// redundant code
-
-  // if(!rowing && fg_histclr) {
-  //   if (fg_draw_len == 0) {
-  //     dy= 250/force_scale_y;
-  //     dl=force_graph_maxy/force_scale_y;
-  //     if (dl> FG_H) dl-=dy;
-  //     for (; dl>=dy; dl-= dy) {
-  //       tft.fillRect(FG_X, FG_Y-dl,                1+GRAPHX_MAX, dy               , TFT_BLACK);
-  //       tft.drawLine(FG_X, FG_Y-dl-1,   FG_X+GRAPHX_MAX, FG_Y-dl-1, GRAPH_GRID);
-  //     }
-  //     fg_draw_len++;
-  //   }
-  // }
-
-// if (fg_draw_len == 0)
-    //   if (fg_histclr>0) {
-    //     for (; fg_draw_len <= fg_histclr; fg_draw_len++)
-    //       if (  (fga[fg_draw_len][1]   >10) && (fga[fg_draw_len+1][1] >10))
-    //         tft.drawLine(FG_X+(fg_draw_len  )*10, FG_Y-(int)(fga[fg_draw_len+0][1]/force_scale_y),
-    //                      FG_X+(fg_draw_len+1)*10, FG_Y-(int)(fga[fg_draw_len+1][1]/force_scale_y), TFT_DARKGREY);
-          
-    //   fg_draw_len=1;
-    // }
-
-// force / time graph
-    // while (fg_draw_len < fg_stroke_len) {
-    //   if (  (fga[fg_draw_len][0]   > (GRAPHX_MIN/FORCE_SCALE_X)) 
-    //      && (fga[fg_draw_len+1][0] <((GRAPHX_MAX+GRAPHX_MIN)/FORCE_SCALE_X))
-    //      && (fga[fg_draw_len][1]   >10)
-    //      && (fga[fg_draw_len+1][1] >10)
-    //      ){
-    //     tft.drawLine(FG_X+(int)(fga[fg_draw_len+0][0]*FORCE_SCALE_X)-GRAPHX_MIN, FG_Y-(int)(fga[fg_draw_len+0][1]/force_scale_y),
-    //                   FG_X+(int)(fga[fg_draw_len+1][0]*FORCE_SCALE_X)-GRAPHX_MIN, FG_Y-(int)(fga[fg_draw_len+1][1]/force_scale_y), GRAPH_LINE);
-    //   }
-    //   fg_draw_len++;
-    // }
-    
