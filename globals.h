@@ -9,6 +9,8 @@
 void forcegraph_log(int force);
 void forcegraph_ready();
 
+void update_elements();
+
 
 //  debugable display!        Time   str splt  dist aspl watts
 char stats_curr[36];  // char "H:MI:SS SM m:ss 12345 A:5m WWW"

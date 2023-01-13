@@ -5,16 +5,17 @@
 
 
 void setup_rower();
-void calc_rower_stroke(unsigned long t_intr);
-void start_rower();
+
+
 void ready_rower();
 void stop_rower();
+
 void process_interrupts();
-void push_interrupt(unsigned long t_intr);
+void push_interrupt(unsigned long t_intr); // for debuggingg
 
 void setup_display(); // setup - called from main setup
 void handle_display( void *param); // display and touch handler
-void draw_elements(); // draw main elements - call subdisplays
+
 void touch_events(); // read and process touch events
 
 
@@ -181,7 +182,6 @@ void setup() {
   // auto ready for rowing to begin
   ready_rower();
 
-
   t_clock = millis();
   fake_intr = t_clock + erg_sim[0];
 }
@@ -210,56 +210,6 @@ void loop(void) {
 
 
 
-/* 
-// 40mhz
-// TFT_eSPI library test!
-// Benchmark                Time (microseconds)
-// Screen fill              502035
-// Text                     26568
-// Lines                    246273
-// Horiz/Vert Lines         42505
-// Rectangles (outline)     23706
-// Rectangles (filled)      1212994
-// Circles (filled)         144902
-// Circles (outline)        93021
-// Triangles (outline)      48744
-// Triangles (filled)       410212
-// Rounded rects (outline)  45503
-// Rounded rects (filled)   1228545
-// Done!
-
 // https://www.messletters.com/en/big-text/  thick
-   //#-DTFT_INVERSION_ON=1 #  turn on for the 3" 320x240 version in platformio.ini
-*/
+//#-DTFT_INVERSION_ON=1 #  turn on for the 3" 320x240 version in platformio.ini
 
-
-//   if ((t_real - t_clock) >= 0.1 Seconds) {
-//     t_clock += 100;
-//     if (++tic == 10) tic=0;
-    
-//     if (rowing) {
-//       curr_stat.elapsed+=0.1;
-
-//       if (tic==0) {
-// #ifdef BLE
-//         send_BLE();
-// #endif
-//         powergraph_plot(curr_stat.watts, curr_stat.spm);
-//         powergraph_scroll();
-//       }
-
-//       row_secs         +=0.1;
-//       if (row_secs >= 60) {
-//         stats_disp[27]='X'; // make the display think that drawing a : is necessary - because it's different
-//         row_secs-=60.0;
-//         if (++row_minutes > 60) {
-//           stats_disp[24]='X';
-//           row_hours++;
-//           row_minutes -= 60;
-//           if (row_hours > 9)
-//             row_hours = 0;
-//         }
-//       }
-//       sprintf(stats_curr+17,"%5.0f %1d:%02d:%04.1f", curr_stat.distance, row_hours, row_minutes, row_secs);
-//     }
-//   }

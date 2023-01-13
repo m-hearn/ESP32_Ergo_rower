@@ -215,8 +215,8 @@ void setup_rower() {
 	stroke_elapsed = ZERO;
 	power_elapsed = ZERO;
 
-  asplit_minutes = 0;  asplit_secs = 0;
-   split_minutes = 0;   split_secs = 0;
+  asplit_minutes = 9;  asplit_secs = 99;
+   split_minutes = 9;   split_secs = 99;
 
 
   force = ZERO;
@@ -457,22 +457,17 @@ Y88b 888 Y8b.     Y88b.    888  888 Y88b 888
       curr_stat.watts = power_vector_avg;
       curr_stat.spm   = 60.0/(stroke_vector_avg+DELTA);
 
-       //       Time   str splt  dist aspl watts
-      // char "SM m:ss A:5m WWW 12345 H:MI:SS"
-      //       123456789012345678901234567890
+      //  update_elements();
       sprintf(stats_curr,"%02d %01d:%02d %1d:%02d %3.0f %5.0f %1d:%02d:%04.1f"
-        , (int) (60.0/stroke_vector_avg)
-        , split_minutes,  split_secs
-        , asplit_minutes, asplit_secs
-        , power_vector_avg // Watts
-        , curr_stat.distance
-        , row_hours, row_minutes, row_secs
+          , (int) (60.0/stroke_vector_avg)
+          , split_minutes,  split_secs
+          , asplit_minutes, asplit_secs
+          , power_vector_avg // Watts
+          , curr_stat.distance
+          , row_hours, row_minutes, row_secs
       );
-      // printf("C %s\n", stats_curr);
-      // printf("D %s\n", stats_disp);
     }
   }
-
 
   /*********************************************************
    if inside power stroke
