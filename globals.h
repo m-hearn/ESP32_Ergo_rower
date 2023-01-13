@@ -4,14 +4,10 @@
 
 
 
-// Force Graph
-#define FORCE_BUF 35
 
-static   double stroke_t = 0;
-volatile int    force_line;
-volatile int    force_ptr;
-volatile double force_graph[FORCE_BUF][2];
 
+void forcegraph_log(int force);
+void forcegraph_ready();
 
 
 //  debugable display!        Time   str splt  dist aspl watts

@@ -107,9 +107,7 @@ double power_ratio_vector[MAX_N];
 double K_damp_estimator_vector[MAX_N];
 double speed_vector[MAX_N];
 
-int stroke_l;
-
-int slow_down_buffer = 1; // when slowing down, only apply after delay and do in chunks.
+int slow_down_buffer = 2; // when slowing down, only apply after delay and do in chunks.
 
 
 // https://www.concept2.com/indoor-rowers/training/calculators/watts-calculator
@@ -127,8 +125,6 @@ int slow_down_buffer = 1; // when slowing down, only apply after delay and do in
 // int force_vector[FORCE_COUNT_MAX];
 
 static double force;
-static double force_max;
-static int    force_maxh;
 
 // #### ##    ## ######## ######## ########  ########  ##     ## ########  ######## 
 //  ##  ###   ##    ##    ##       ##     ## ##     ## ##     ## ##     ##    ##    
@@ -222,12 +218,8 @@ void setup_rower() {
   asplit_minutes = 0;  asplit_secs = 0;
    split_minutes = 0;   split_secs = 0;
 
-  force_ptr = 0;
-  force_graph[0][0] = ZERO;
-  force_graph[0][1] = ZERO;
+
   force = ZERO;
-  force_max = ZERO;
-  force_maxh = 0;
 
   row_hours = 0; row_minutes = 0; row_secs = 0.0;
   
@@ -392,27 +384,8 @@ void calc_rower_stroke(unsigned long t_intr) {
       }
       stroke++;
       curr_stat.stroke++;
-          
-      // Force display - undraw?  ready for next?
-      stroke_t = 0;
-      stroke_l = 0;
-      force_ptr = 0; 
-      force_line = -1;
-      // work out if graph is too small or too large,  delay shrinking 
-      // if ((force_graph_maxy - force_max) < 125) {
-      //   force_graph_maxy+=250;
-      // } else {
-      //   if ((force_graph_maxy - force_max) > 375) {
-      //     if (1 == force_maxh) {
-      //       force_graph_maxy-=250;
-      //       force_maxh = 0;
-      //     } else {
-      //       force_maxh = 1;
-      //     }
-      //   } else force_maxh = 0;
-      // } 
-      //Serial.printf("%f %d\n", force_max, force_graph_maxy);
-  
+
+      forcegraph_ready();
     }
   }
   
@@ -438,6 +411,7 @@ Y88b 888 Y8b.     Y88b.    888  888 Y88b 888
       power_elapsed = tmp_elapsed;
       stroke_elapsed = (t_intr - t_stroke) / 1000.0;
       t_stroke = t_intr;
+      slow_down_buffer = 2;
 
       K_damp_estimator = 0.0;
 
@@ -510,14 +484,7 @@ Y88b 888 Y8b.     Y88b.    888  888 Y88b 888
 
     // setup force plot
     force = (force + (J_moment*Wd_v[0] + K_damp*(W_v[0]*W_v[0]) ) /(current_dt)) /2;
-    //if (force > force_max) force_max = force;
-    //if (force > force_graph_maxy) force = force_graph_maxy;
-    stroke_t+=current_dt;
-    if (++force_ptr < FORCE_BUF) {
-      force_graph[force_ptr][0]=stroke_t;
-      force_graph[force_ptr][1]=force;
-    }
-    
+    forcegraph_log(force);
   }
   
   /*********************************************************
@@ -532,10 +499,10 @@ Y88b 888 Y8b.     Y88b.    888  888 Y88b 888
   t_last = t_intr;
   last_dt = current_dt;
 
-  //if (!DEBUG) 
+  if (!DEBUG) 
   {
-    printf("%6ld,%4d,%4.3f,%4.3f,%d,%4.1f,% 6.1f,% 6.1f,%4.3f,%5.5f,%2.0f,%3.0f,%4.0f,%3.0f,%5.5f,%6ld,%5.5f,%5.5f\n"
-      ,    t_intr,stroke, stroke_t,current_dt
+    printf("%6ld,%4d,%4.3f,%d,%4.1f,% 6.1f,% 6.1f,%4.3f,%5.5f,%2.0f,%3.0f,%4.0f,%3.0f,%5.5f,%6ld,%5.5f,%5.5f\n"
+      ,    t_intr,stroke, current_dt
       ,                          power_stroke_screen[0]*9
       , W_v[0], Wd_v[0], Wdd_v
       , cal_factor
@@ -550,7 +517,17 @@ Y88b 888 Y8b.     Y88b.    888  888 Y88b 888
   }
 };
 
-
+//      888                                 
+//      888                                 
+//      888                                 
+//  .d88888  8888b.  88888b.d88b.  88888b.  
+// d88" 888     "88b 888 "888 "88b 888 "88b 
+// 888  888 .d888888 888  888  888 888  888 
+// Y88b 888 888  888 888  888  888 888 d88P 
+//  "Y88888 "Y888888 888  888  888 88888P"  
+//                                 888      
+//                                 888      
+//                                 888  
 
 void check_slow_down(double t_real) {
   double new_elapsed;
@@ -559,40 +536,56 @@ void check_slow_down(double t_real) {
 
   new_elapsed = (t_real - t_power) / 1000.0;
 
-  if ((new_elapsed + slow_down_buffer) < stroke_elapsed) return;
+  if ((new_elapsed - slow_down_buffer) < stroke_elapsed) return;
   
   if (new_elapsed > 6) rowing = 0;
 
-  speed_vector[position2] = stroke_distance/(new_elapsed +DELTA);
+  slow_down_buffer++;
 
-  curr_stat.split_secs = (int) 500.0/(weighted_avg(speed_vector, &position2) + DELTA);
-  curr_stat.asplit_secs = (int) 500.0*curr_stat.elapsed/curr_stat.distance;
+  // Serial.print(".");
+
+  // speed_vector[position2] = stroke_distance/(new_elapsed +DELTA);
+
+  // curr_stat.split_secs = (int) 500.0/(weighted_avg(speed_vector, &position2) + DELTA);
+  // curr_stat.asplit_secs = (int) 500.0*curr_stat.elapsed/curr_stat.distance;
   
-  // format split -- should be done in display
-  split_minutes = curr_stat.split_secs/60;
-  split_secs   =  curr_stat.split_secs -split_minutes*60;
+  // // format split -- should be done in display
+  // split_minutes = curr_stat.split_secs/60;
+  // split_secs   =  curr_stat.split_secs -split_minutes*60;
 
-  asplit_minutes = curr_stat.asplit_secs/60;
-  asplit_secs    = curr_stat.asplit_secs - asplit_minutes*60;
+  // asplit_minutes = curr_stat.asplit_secs/60;
+  // asplit_secs    = curr_stat.asplit_secs - asplit_minutes*60;
   
-  // calc Watts
-  power_ratio_vector[position2] = power_elapsed/(new_elapsed + DELTA);
-  power_ratio_vector_avg = weighted_avg(power_ratio_vector, &position2);
+  // // calc Watts
+  // power_ratio_vector[position2] = power_elapsed/(new_elapsed + DELTA);
+  // power_ratio_vector_avg = weighted_avg(power_ratio_vector, &position2);
 
-  power_vector[position2]= (J_power + K_power)/(new_elapsed + DELTA);
-  if (power_vector[position2] > 999.0) {
-    power_vector[position2] = 0.0;
-  }
-  power_vector_avg = weighted_avg(power_vector, &position2);
+  // power_vector[position2]= (J_power + K_power)/(new_elapsed + DELTA);
+  // if (power_vector[position2] > 999.0) {
+  //   power_vector[position2] = 0.0;
+  // }
+  // power_vector_avg = weighted_avg(power_vector, &position2);
 
-  stroke_vector[position2]= new_elapsed;
-  stroke_vector_avg = weighted_avg(stroke_vector,&position2);
+  // stroke_vector[position2]= new_elapsed;
+  // stroke_vector_avg = weighted_avg(stroke_vector,&position2);
   
-  // update row stats for graphics
+  // // // update row stats for graphics
 
-  curr_stat.watts = power_vector_avg;
-  curr_stat.spm   = 60.0/(stroke_vector_avg+DELTA);
+  // // curr_stat.watts = power_vector_avg;
+  // curr_stat.spm   = 60.0/(stroke_vector_avg+DELTA);
 }
+
+//                                        d8b          888            
+//                                        Y8P          888            
+//                                                     888            
+// 88888b.  888d888  .d88b.   .d8888b     888 88888b.  888888 888d888 
+// 888 "88b 888P"   d88""88b d88P"        888 888 "88b 888    888P"   
+// 888  888 888     888  888 888          888 888  888 888    888     
+// 888 d88P 888     Y88..88P Y88b.        888 888  888 Y88b.  888     
+// 88888P"  888      "Y88P"   "Y8888P     888 888  888  "Y888 888     
+// 888                                                                
+// 888                                                                
+// 888         
 
 void process_interrupts(){
   
@@ -607,6 +600,8 @@ void process_interrupts(){
     }
   }
 }
+
+
 
 #ifndef ARDUINO
 int main() {
