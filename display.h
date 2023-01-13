@@ -140,20 +140,22 @@ void powergraph_scroll(){
 
 #define X_TIME 10
 
-static int FG_X = 50;
-static int FG_Y = 305;
-static int FG_H = 160;
-static int FG_W = 248;
-static int force_graph_maxy = 2400;
-static double force_scale_y = 10.0;
+#define FG_X 50
+#define FG_Y 305
+#define FG_H 160
+#define FG_W 250
+#define force_graph_maxy 2400
+#define force_scale_y force_graph_maxy/FG_H
 
 // Force Graph
-#define FORCE_BUF 35
+#define FORCE_BUF 25
+#define FORCE_STROKES 10
 
 static   double stroke_t = 0;
-volatile int    force_line;
-volatile int    force_ptr;
-volatile double force_graph[FORCE_BUF][2];
+volatile int    fg_draw_len;
+volatile int    fg_stroke_len;
+int fg_stroke;
+volatile double fga[FORCE_STROKES][FORCE_BUF];
 
 
 #define GRAPH_GRID TFT_DARKGREY  
@@ -162,9 +164,9 @@ volatile double force_graph[FORCE_BUF][2];
 
 #define FORCE_SCALE_X 250.0
 
-TFT_eSprite fg_sprite = TFT_eSprite(&tft);
 uint16_t fg_palette[16];
 void forcegraph_setup() {
+  int d,s;
 
   tft.drawLine(FG_X-1,FG_Y+FG_H+2,FG_X+FG_W,FG_Y+FG_H+2   ,GRAPH_AXIS);
   tft.drawLine(FG_X-1,FG_Y     +1,FG_X-1   ,FG_Y+FG_H     ,GRAPH_AXIS);
@@ -175,34 +177,39 @@ void forcegraph_setup() {
   tft.setCursor(18,360);
   tft.printf("Kg");
 
-  force_scale_y = force_graph_maxy / (double) FG_H;
+  // force_scale_y = force_graph_maxy / (double) FG_H;
 
-  fg_palette[0]  = TFT_BLACK;
-  fg_palette[1]  = TFT_BLACK;
-  fg_palette[2]  = TFT_BLACK;
-  fg_palette[3]  = 0x0841;
-  fg_palette[4]  = 0x1082;
-  fg_palette[5]  = 0x18c3;
-  fg_palette[6]  = 0x2104;
-  fg_palette[7]  = 0x2945;
-  fg_palette[8]  = 0x3186;
-  fg_palette[9]  = 0x39c7;
-  fg_palette[10] = 0x4208;
-  fg_palette[11] = 0x4a49;
-  fg_palette[12] = 0x528a;
-  fg_palette[13] = 0x5acb;
-  fg_palette[14] = 0x630c;
-  fg_palette[15] = 0x6b4d;
+  d=0;
 
+// Grey scale increments in 565 bits
+// spread out to fade out to black after 10 strokes
+  fg_palette[d++] = TFT_BLACK;
+  // fg_palette[d++] = 0x0841;
+  // fg_palette[d++] = 0x1082;
+  // fg_palette[d++] = 0x18c3;
+  fg_palette[d++] = 0x2104;
+  // fg_palette[d++] = 0x2945;
+  fg_palette[d++] = 0x3186;
+  // fg_palette[d++] = 0x39c7;
+  fg_palette[d++] = 0x4208;
+  // fg_palette[d++] = 0x4a49;
+  fg_palette[d++] = 0x528a;
+  // fg_palette[d++] = 0x5acb;
+  fg_palette[d++] = 0x630c;
+  // fg_palette[d++] = 0x6b4d;
+  fg_palette[d++] = 0x738e;
+  // fg_palette[d++] = 0x76cf
+  fg_palette[d++] = 0x8410;
+  fg_palette[d++] = 0xa534;  
+  fg_palette[d++] = 0xb5b6;  
   
-  fg_sprite.createSprite(FG_W,FG_H);
-  fg_sprite.setColorDepth(4);
-  fg_sprite.createPalette(&fg_palette[0]); 
+  fg_stroke = 0;
+  fg_draw_len = 0;
+  fg_stroke_len = 0;
 
-  force_line = 0;
-  force_ptr = 0;
-  force_graph[0][0] = ZERO;
-  force_graph[0][1] = ZERO;
+  for(d = 0; d< FORCE_BUF; d++)
+    for(s = 0; s< FORCE_STROKES; s++)
+      fga[s][d]=FG_H;
 
 }
 
@@ -213,54 +220,62 @@ void forcegraph_setup() {
 #define GRAPHX_MAX 243
 #define FG_X_SCALE 10
 
-int fg_histclr = 1;
 
-int fg[16][35];
 
+int fg[16][FORCE_BUF];
+
+// Next stroke starting
 void forcegraph_ready(){
-  force_ptr = 0; 
-  force_line = -1;
+  // clear the rest of this strokes line data  - jic
+  while (fg_stroke_len < FORCE_BUF) fga[fg_stroke][fg_stroke_len++] = FG_H;
+  fg_stroke_len = 0; 
+  fg_draw_len = 0;
+  fg_stroke++;
+  if (fg_stroke == FORCE_STROKES) fg_stroke = 0;
 }
   
 void forcegraph_log(int force) {
-  //stroke_t+=current_dt;
-  if (++force_ptr < FORCE_BUF) {
-    force_graph[force_ptr][0]=stroke_t;
-    force_graph[force_ptr][1]=force;
-  }
+  int force_y;
+
+  if (fg_stroke_len == FORCE_BUF) return;
+  
+  force_y = (int) (force / force_scale_y);
+  if (force_y > FG_H) force_y = FG_H;
+  if (force_y < 0)    force_y = 0;
+  fga[fg_stroke][fg_stroke_len++]=FG_H - force_y;
 }
 
 
 void forcegraph_draw(){
-int x1,y1,x2,y2;
+  int x1,y1,x2,y2;
+  int d,s,ss;
+  int fg_histclr = 1;
 
   if(!rowing) return;
 
-  if(force_line == -1) {
-    // starting new stroke
-    force_line = 0;
-    fg_sprite.pushSprite(FG_X,FG_Y);
-    fg_histclr = (fg_histclr+1)&7;
-    return;
+  if (fg_draw_len == 0) {
+    for(d = 0; d<24; d++) {
+      for(s = 0, ss=fg_stroke; s< FORCE_STROKES; s++, ss++) {
+        if (ss == FORCE_STROKES) ss = 0;
+        if(fga[ss][d]+fga[ss][d+1]< (2*FG_H))  {
+          tft.drawLine(FG_X+d*10, FG_Y+fga[ss][d], FG_X+d*10+10, FG_Y+fga[ss][d+1], fg_palette[s]);
+        }
+      }
+    }
+    fg_draw_len = 1;
   }
   
-  while (force_line < force_ptr) {
-    if (force_graph[force_line][1]> force_graph_maxy) force_graph[force_line][1] = force_graph_maxy;
-    y1 = FG_H-(int)force_graph[force_line  ][1]/force_scale_y;
-    y2 = FG_H-(int)force_graph[force_line+1][1]/force_scale_y;
-    x1 = force_line*FG_X_SCALE;
-    x2 = x1+FG_X_SCALE;
-    if ((y1 < FG_H)  && (y2 < FG_H)){
-      fg_sprite.drawLine(x1, y1  , x2, y2  , fg_histclr);      x1+=FG_X; x2+=FG_X; y1+=FG_Y; y2+=FG_Y;
-      tft.drawLine      (x1, y1++, x2, y2++, TFT_YELLOW);
-      tft.drawLine      (x1, y1  , x2, y2  , TFT_YELLOW);
+  while (fg_draw_len < fg_stroke_len) {
+    y1 = fga[fg_stroke][fg_draw_len-1] + FG_Y;
+    y2 = fga[fg_stroke][fg_draw_len  ] + FG_Y;
+    if (y1+y2<((FG_Y+FG_H)*2)) {
+      x1 = (fg_draw_len-1)*FG_X_SCALE        + FG_X;
+      x2 = x1+FG_X_SCALE;
+      tft.drawLine      (x1, y1, x2, y2, TFT_YELLOW);
     }
-    force_line++;
+    fg_draw_len++;
   }
 };
-
-
-
 
 static int disp_loc[][4] = {
   { X_SM,        Y_SM,1,1},  //S
@@ -519,7 +534,7 @@ void core0_handler(void *param){
 // redundant code
 
   // if(!rowing && fg_histclr) {
-  //   if (force_line == 0) {
+  //   if (fg_draw_len == 0) {
   //     dy= 250/force_scale_y;
   //     dl=force_graph_maxy/force_scale_y;
   //     if (dl> FG_H) dl-=dy;
@@ -527,30 +542,30 @@ void core0_handler(void *param){
   //       tft.fillRect(FG_X, FG_Y-dl,                1+GRAPHX_MAX, dy               , TFT_BLACK);
   //       tft.drawLine(FG_X, FG_Y-dl-1,   FG_X+GRAPHX_MAX, FG_Y-dl-1, GRAPH_GRID);
   //     }
-  //     force_line++;
+  //     fg_draw_len++;
   //   }
   // }
 
-// if (force_line == 0)
+// if (fg_draw_len == 0)
     //   if (fg_histclr>0) {
-    //     for (; force_line <= fg_histclr; force_line++)
-    //       if (  (force_graph[force_line][1]   >10) && (force_graph[force_line+1][1] >10))
-    //         tft.drawLine(FG_X+(force_line  )*10, FG_Y-(int)(force_graph[force_line+0][1]/force_scale_y),
-    //                      FG_X+(force_line+1)*10, FG_Y-(int)(force_graph[force_line+1][1]/force_scale_y), TFT_DARKGREY);
+    //     for (; fg_draw_len <= fg_histclr; fg_draw_len++)
+    //       if (  (fga[fg_draw_len][1]   >10) && (fga[fg_draw_len+1][1] >10))
+    //         tft.drawLine(FG_X+(fg_draw_len  )*10, FG_Y-(int)(fga[fg_draw_len+0][1]/force_scale_y),
+    //                      FG_X+(fg_draw_len+1)*10, FG_Y-(int)(fga[fg_draw_len+1][1]/force_scale_y), TFT_DARKGREY);
           
-    //   force_line=1;
+    //   fg_draw_len=1;
     // }
 
 // force / time graph
-    // while (force_line < force_ptr) {
-    //   if (  (force_graph[force_line][0]   > (GRAPHX_MIN/FORCE_SCALE_X)) 
-    //      && (force_graph[force_line+1][0] <((GRAPHX_MAX+GRAPHX_MIN)/FORCE_SCALE_X))
-    //      && (force_graph[force_line][1]   >10)
-    //      && (force_graph[force_line+1][1] >10)
+    // while (fg_draw_len < fg_stroke_len) {
+    //   if (  (fga[fg_draw_len][0]   > (GRAPHX_MIN/FORCE_SCALE_X)) 
+    //      && (fga[fg_draw_len+1][0] <((GRAPHX_MAX+GRAPHX_MIN)/FORCE_SCALE_X))
+    //      && (fga[fg_draw_len][1]   >10)
+    //      && (fga[fg_draw_len+1][1] >10)
     //      ){
-    //     tft.drawLine(FG_X+(int)(force_graph[force_line+0][0]*FORCE_SCALE_X)-GRAPHX_MIN, FG_Y-(int)(force_graph[force_line+0][1]/force_scale_y),
-    //                   FG_X+(int)(force_graph[force_line+1][0]*FORCE_SCALE_X)-GRAPHX_MIN, FG_Y-(int)(force_graph[force_line+1][1]/force_scale_y), GRAPH_LINE);
+    //     tft.drawLine(FG_X+(int)(fga[fg_draw_len+0][0]*FORCE_SCALE_X)-GRAPHX_MIN, FG_Y-(int)(fga[fg_draw_len+0][1]/force_scale_y),
+    //                   FG_X+(int)(fga[fg_draw_len+1][0]*FORCE_SCALE_X)-GRAPHX_MIN, FG_Y-(int)(fga[fg_draw_len+1][1]/force_scale_y), GRAPH_LINE);
     //   }
-    //   force_line++;
+    //   fg_draw_len++;
     // }
     
