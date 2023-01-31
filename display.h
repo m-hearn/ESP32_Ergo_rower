@@ -164,7 +164,9 @@ volatile double fga[FORCE_STROKES][FORCE_BUF];
 
 #define FORCE_SCALE_X 250.0
 
+TFT_eSprite fg_sprite = TFT_eSprite(&tft);
 uint16_t fg_palette[16];
+
 void forcegraph_setup() {
   int d,s;
 
@@ -180,7 +182,6 @@ void forcegraph_setup() {
   // force_scale_y = force_graph_maxy / (double) FG_H;
 
   d=0;
-
 // Grey scale increments in 565 bits
 // spread out to fade out to black after 10 strokes
   fg_palette[d++] = TFT_BLACK;
@@ -202,7 +203,15 @@ void forcegraph_setup() {
   fg_palette[d++] = 0x8410;
   fg_palette[d++] = 0xa534;  
   fg_palette[d++] = 0xb5b6;  
-  
+
+  fg_palette[d++] = TFT_RED;
+  fg_palette[d++] = TFT_ORANGE;
+  fg_palette[d++] = TFT_YELLOW;
+  fg_palette[d++] = TFT_GREENYELLOW;
+  fg_palette[d++] = TFT_GREEN;
+  fg_palette[d++] = TFT_SKYBLUE;
+
+
   fg_stroke = 0;
   fg_draw_len = 0;
   fg_stroke_len = 0;
@@ -211,6 +220,11 @@ void forcegraph_setup() {
     for(s = 0; s< FORCE_STROKES; s++)
       fga[s][d]=FG_H;
 
+  fg_sprite.createSprite(100,80);
+  fg_sprite.setColorDepth(4);
+  fg_sprite.createPalette(fg_palette);
+  fg_sprite.drawRect(0,0,99,79,9);
+  fg_sprite.pushSprite(219,288);
 }
 
 
@@ -223,26 +237,187 @@ void forcegraph_setup() {
 
 
 int fg[16][FORCE_BUF];
+int fg_N[FORCE_BUF];
+double fg_dy[FORCE_BUF];
+double fg_N_sum;
+double fg_N_cnt;
+int stroke_len = 1;
+int fg_dirty =0;
+
+double af_eff = 5.0;
+double ab_eff = 5.0;
+double astdev = 5.0;
+double aoffst = 0.0;
+
+// coach
+// Late arms   // negatives in back half / dips
+// Late torso  // negatives in front half
+// Too early   // mean < 0.5 stroke
+// Weak legs   // mean > 0.5 stroke
+// Too loose   // high stddev?
+// Too peaky   // low stddev
+// Not smooth  // negative curves
 
 // Next stroke starting
 void forcegraph_ready(){
+  int i,fx,fy,bx,by;
+  // do the analysis here
+  double stroke_mid = stroke_len / 2.0;
+  double stdev = 0.0;  // somewhere between 14 and 20?  17.5 maybe good for smooth
+  double mean  = 0.0;  // this wants to be close to stroke_len / 2
+  double effic_fp = 0.0;
+  double effic_fn = 0.0;
+  double effic_bp = 0.0;
+  double effic_bn = 0.0;
+  double f_eff, b_eff;
+  double offset;
+
   // clear the rest of this strokes line data  - jic
-  while (fg_stroke_len < FORCE_BUF) fga[fg_stroke][fg_stroke_len++] = FG_H;
+  while (fg_stroke_len < FORCE_BUF) {
+    fg_N[fg_stroke_len] = 0;
+    fg_dy[fg_stroke_len-1] = 0;
+    fga[fg_stroke][fg_stroke_len++] = FG_H;
+  }
+
+  mean = fg_N_sum / fg_N_cnt;
+
+  // front half of the stroke
+  for (i=0;i<=mean;i++){
+    stdev += (mean - (double)(i+1.0))*(mean - (double)(i+1.0))*(double)fg_N[i];
+    if (fg_dy[i]< 0.0) 
+      effic_fn -= fg_dy[i]; 
+    else 
+      effic_fp += fg_dy[i];
+  }
+  // first dy already excluded
+  if(fg_dy[1]<0) effic_fn+=fg_dy[1];
+  
+  // back half of the stroke
+  for (;(i<FORCE_BUF) && (fg_N[i]);i++){
+    stdev += (mean - (double)(i+1.0))*(mean - (double)(i+1.0))*(double)fg_N[i];
+    if (fg_dy[i]< 0.0) 
+      effic_bn -= fg_dy[i]; 
+    else 
+      effic_bp += fg_dy[i];
+    
+  }
+  // don't penalise ramp in / ramp out - a bit.
+  if(i>1 && fg_dy[i-2]<0) {
+    effic_bn+=fg_dy[i-2];
+    if(i>2 && fg_dy[i-3]<0) effic_bn+=fg_dy[i-3];
+  }
+  
+  stdev = stdev / fg_N_cnt;
+  stdev -= 17; // max is about 26/27
+  if (stdev < 1) stdev = 1;  // range 1 to 10
+
+  f_eff = (1+effic_fp)/(1+effic_fn)   - 2;
+  b_eff = (1+effic_bp)/(1+effic_bn)*4 - 4;
+  
+  if (f_eff>9.9) f_eff = 9.9;
+  if (b_eff>9.9) b_eff = 9.9;
+  if (f_eff<0.1) f_eff = 0.1;
+  if (b_eff<0.1) b_eff = 0.1;
+
+  offset = mean - stroke_mid;  // -ve  front load +ve back load 
+
+  // Tuning params - debug  
+  // for (i=0;i<FORCE_BUF;i++) Serial.printf("%d,",fg_N[i]);
+  // for (i=0;i<FORCE_BUF;i++) Serial.printf("%4.2f,",fg_dy[i]);
+  // Serial.printf("%3.3f,%2.2f,%4.1f,%4.1f,%2.1f,%4.1f,%4.1f,%2.1f,%3.1f\n", mean, stroke_mid, effic_fn, effic_fp, effic_bn, effic_bp, f_eff, b_eff, stdev);
+  Serial.printf("%3.1f, %3.1f, %3.1f, %2.1f, %3.1f, %3.1f, %3.1f, %2.1f\n", f_eff, b_eff, stdev, offset, af_eff, ab_eff, astdev, aoffst);
+
+#define FG_BLOB 8
+
+  fg_sprite.fillRect(0,0,99,79,0);
+  fg_sprite.drawLine(49,0,49,79,9);
+  fg_sprite.drawLine(0,80-7*8,98,80-7*8,14);
+
+  fx = 46-(int)(astdev*4)-(int)(aoffst*5);
+  fy = 80-(int)(af_eff*8);
+  bx = 54+(int)(astdev*4)-(int)(aoffst*5);
+  by = 80-(int)(ab_eff*8);
+  fg_sprite.fillRect(fx,fy,FG_BLOB,FG_BLOB,9);
+  fg_sprite.fillRect(bx,bx,FG_BLOB,FG_BLOB,9);
+  fg_sprite.drawLine(fx+4,fy+4,bx+4,by+4,6);
+  
+  fx = 46-(int)(stdev*4)-(int)(offset*5);
+  fy = 80-(int)(f_eff*8);
+  bx = 54+(int)(stdev*4)-(int)(offset*5);
+  by = 80-(int)(b_eff*8);
+  fg_sprite.drawRect(fx,fy,FG_BLOB,FG_BLOB,(int)(10.4+(f_eff/2)));
+  fg_sprite.drawRect(bx,by,FG_BLOB,FG_BLOB,(int)(10.4+(b_eff/2)));
+  fg_sprite.drawLine(fx+4,fy+4,bx+4,by+4,(int)(10.4+(f_eff+b_eff)/4));
+  
+
+  // af_eff = (af_eff*(9-f_eff)+(1+f_eff)*f_eff)/10.0;
+  // ab_eff = (ab_eff*(9-b_eff)+(1+b_eff)*b_eff)/10.0;
+  // astdev = (astdev*(9-stdev)+(1+stdev)*stdev)/10.0;
+  af_eff = (af_eff*(190-f_eff)+(10+f_eff)*f_eff)/200.0;
+  ab_eff = (ab_eff*(190-b_eff)+(10+b_eff)*b_eff)/200.0;
+  astdev = (astdev*(190-stdev)+(10+stdev)*stdev)/200.0;
+  aoffst = (aoffst*9+offset)/10;
+  
+  fx = 46-(int)(astdev*4)-(int)(aoffst*5);
+  fy = 80-(int)(af_eff*8);
+  bx = 54+(int)(astdev*4)-(int)(aoffst*5);
+  by = 80-(int)(ab_eff*8);
+  fg_sprite.fillRect(fx,fy,FG_BLOB,FG_BLOB,(int)(10.4+(af_eff/2)));
+  fg_sprite.fillRect(bx,by,FG_BLOB,FG_BLOB,(int)(10.4+(ab_eff/2)));
+  fg_sprite.fillRect((fx+bx)/2,(fy+by)/2,5,5,9);
+  fg_sprite.drawLine(fx+4,fy+4,bx+4,by+4,9);
+  
+  fg_dirty = 1;
+  
+
+  // effic_p/effic_n from 2 to 4+    4+ is good
+  // stdev 16 to 25 +  18 is narrow  22+ is good
+  // stroke_mid - mean   +ve is front loaded  -ve is late   under 0.5 is good?
+
   fg_stroke_len = 0; 
   fg_draw_len = 0;
-  fg_stroke++;
-  if (fg_stroke == FORCE_STROKES) fg_stroke = 0;
+  if (++fg_stroke == FORCE_STROKES) fg_stroke = 0;
+
+  fg_N_sum = 0;
+  fg_N_cnt = 0;
+  stroke_len = 1;
 }
   
 void forcegraph_log(int force) {
   int force_y;
+  double dy;
 
   if (fg_stroke_len == FORCE_BUF) return;
+  if (force < 0) force = 0;
   
+  fg_N[fg_stroke_len]= force;
+
+// Doesn't diff the first tick - it's most likely negative gradient - so okay to ignore
+  if (fg_stroke_len > 1) {
+    if (force) {
+      stroke_len++;
+      fg_dy[fg_stroke_len-1] = (double)(fg_N[fg_stroke_len-1]) - (double)(fg_N[fg_stroke_len-2]+fg_N[fg_stroke_len])/2.0;
+      // //  95 10 5  -> 10 - (95+5)/2 = -40  ->  10/-40 = -.25      
+      // dy = (double) fg_N[fg_stroke_len -1] / dy;
+      // if (dy > +0.1){
+      //   fg_dy[fg_stroke_len-1] = dy;
+      // }
+      // if (dy < -0.1) {
+      //   fg_dy[fg_stroke_len-1] = dy;
+      // }
+    }
+    else fg_dy[fg_stroke_len-1] = 0;
+  }
+  fg_N_sum += (fg_stroke_len+1) * force;
+  fg_N_cnt += force;
+  
+  // save the force for plotting, and index
   force_y = (int) (force / (force_scale_y));
   if (force_y > FG_H) force_y = FG_H;
-  if (force_y < 0)    force_y = 0;
-  fga[fg_stroke][fg_stroke_len++]=FG_H - force_y;
+  // if (force_y < 0)    force_y = 0;
+  fga[fg_stroke][fg_stroke_len]=FG_H - force_y;
+
+  fg_stroke_len++;
 }
 
 
@@ -251,7 +426,17 @@ void forcegraph_draw(){
   int d,s,ss;
   int fg_histclr = 1;
 
+  if (fg_dirty) {
+    fg_sprite.pushSprite(219,288);
+    fg_dirty = 0;
+  }
+
   if(!rowing) return;
+
+  // start of a new stroke
+  // cycle through previous strokes
+  // redraw from black through to light grey
+  // effectively fade out the oldest stroke
 
   if (fg_draw_len == 0) {
     for(d = 0; d<FORCE_BUF-1; d++) {
