@@ -12,6 +12,22 @@ ERGO handles all events to do with rowing, and stats
 Display covers timed updates and notification.
 
 
+Display                 main                        ergo                    BLE
+
+setup_display           setup                       setup_rower             setup_ble
+                                                    ready_rower
+
+loop(0)                 loop(1)                     
+  call draw*               call ->                  process_interrupts      send_ble
+
+force_graph             start_pull                  start_rower             check_ble
+powergraph              end_pull                    stop_rower
+elements                record_force                calc_power_stroke
+stroke_score            stroke_analysis             check_slow_down*      
+
+                        stop_watch?
+
+*not working
 
 
 

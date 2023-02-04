@@ -1,28 +1,19 @@
 #ifndef GLOBALS
 
+#define MAX_STROKE_LEN 25  // maximum number of ticks per stroke  - mine are about 5-6cm apart - so 1.3m total (missing a couple at the start and end)
+
 #define Seconds *1000.0
 
-
-
-
-
-void forcegraph_log(int force);
-void forcegraph_ready();
-
-void update_elements();
-
+// Erg sim
+extern int erg_sim[];
 
 //  debugable display!        Time   str splt  dist aspl watts
-char stats_curr[36];  // char "H:MI:SS SM m:ss 12345 A:5m WWW"
-char stats_disp[36];  //       123456789012345678901234567890
+extern char stats_curr[36];  // char "H:MI:SS SM m:ss 12345 A:5m WWW"
+extern char stats_disp[36];  //       123456789012345678901234567890
 
-static int row_hours;
-static int row_minutes;
-static double row_secs;
-static int split_minutes;
-static int split_secs;
-static int asplit_minutes;
-static int asplit_secs;
+extern  int row_hours;
+extern  int row_minutes;
+extern  double row_secs;
 
 struct stats {
 	int    stroke;
@@ -32,18 +23,30 @@ struct stats {
 	double spm;
 	int	 watts;
 	double distance;
+	int pull;
 };
 
-static int stroke = 0;
+extern struct stats curr_stat, disp_stat;
 
-struct stats curr_stat, disp_stat;
+struct analysis {
+	double f_eff;
+	double b_eff;
+	double spread;
+	double offset;
+};
 
-static int DEBUG = 0;
-static int rowing =0;
+extern struct analysis curr_score, aver_score, last_score;
+
+extern  int DEBUG;
+extern  int rowing;
 
 #define DISPLAY_CPU 0
 #define ROWER_CPU 1
 
 #define GLOBALS
+
+extern void record_force(int force);
+extern void start_pull();
+extern void end_pull();
 
 #endif
