@@ -109,7 +109,7 @@ static int Wdd_screen = 0;
 static int power_stroke_screen[2];
 
 unsigned long t_power, t_stroke;  // start time of power stroke and stroke
-unsigned long t_last;  // timestamps of interrupt ticks in the buffer
+unsigned long t_last_intr;  // timestamps of interrupt ticks in the buffer
 //unsigned long t_clock, t_real;  // clock counters
 
 int position1 = 0, position2 = 0;
@@ -261,7 +261,7 @@ void ready_rower(){
 
 void start_rower(unsigned long now){
   int j;
-  t_last   = now;
+  t_last_intr   = now;
   t_stroke = now;
   t_power  = now;
 
@@ -324,7 +324,7 @@ void calc_rower_stroke(unsigned long t_intr) {
    calculate omegas
   ************************************************/
 
-  current_dt = (t_intr - t_last) / 1000.0;
+  current_dt = (t_intr - t_last_intr) / 1000.0;
   if (0 == current_dt) return; // also avoids DIV by 0 -- otherwise use /(current_dt+DELTA)
 
   // save last
@@ -476,14 +476,14 @@ Y88b 888 Y8b.     Y88b.    888  888 Y88b 888
 
       end_pull();
 
-      //  update_elements();
-      sprintf(stats_curr,"%02d %01d:%02d %1d:%02d %3.0f %5.0f %1d:%02d:%04.1f"
+
+      sprintf(stats_curr,"%02d %01d:%02d %1d:%02d %3.0f %05.0f"// %1d:%02d:%04.1f"
           , (int) (60.0/stroke_vector_avg)
           , split_minutes,  split_secs
           , asplit_minutes, asplit_secs
           , power_vector_avg // Watts
           , curr_stat.distance
-          , row_hours, row_minutes, row_secs
+          // , row_hours, row_minutes, row_secs
       );
     }
   }
@@ -510,7 +510,7 @@ Y88b 888 Y8b.     Y88b.    888  888 Y88b 888
   }
 
   curr_stat.distance += cal_factor;
-  t_last = t_intr;
+  t_last_intr = t_intr;
   last_dt = current_dt;
 
   if (!DEBUG) 
@@ -528,6 +528,8 @@ Y88b 888 Y8b.     Y88b.    888  888 Y88b 888
       ,                                                                                          J_power,K_power
       ,                                                                                                      K_damp_estimator
     );
+
+    update_stats();
 };
 
 //      888                                 
@@ -624,8 +626,8 @@ int main() {
 
   printf("     T,  S#,   St,   dt,R,  W,     Wd,    Wdd,    C,   damp,SM,  W,   D, Kg\n"); 
 
-  t_last = erg_sim[0];
-  t_intr  = t_last;
+  t_last_intr = erg_sim[0];
+  t_intr  = t_last_intr;
   t_clock = t_intr;
   start_rower();
 

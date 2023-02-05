@@ -2,7 +2,7 @@
 extern void force_graph_plot(int force);
 extern void force_graph_ready();
 
-extern void update_elements();
+extern void update_stats();
 
 extern void setup_display(); // setup - called from main setup
 extern void handle_display( void *param); // display and touch handler

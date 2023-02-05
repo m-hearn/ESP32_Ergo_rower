@@ -13,7 +13,7 @@ void stop_rower();
 #include "globals.h"
 // global definitions
 
-struct stats curr_stat, disp_stat;
+struct stats curr_stat;
 struct analysis curr_score, aver_score, last_score;
 
 int DEBUG = 0;
@@ -25,7 +25,11 @@ double fg_dy[MAX_STROKE_LEN];
 double fg_N_sum;
 double fg_N_cnt;
 
-
+char stopwatch[8]; // mssmihX
+char stopwatch_disp[8]; // hmmssm but backwards
+char stopwatch_max[] = "995959:";
+void stopwatch_reset();
+void stopwatch_inc();
 
 /*
                                                                                     
@@ -124,22 +128,11 @@ Y8a     a8P    88,    "8a,   ,a8"  88          88,    ,88  "8a,   ,d88  "8b,   ,
 
 
 
-/*
-88b           d88              88                   88                                         
-888b         d888              ""                   88                                         
-88`8b       d8'88                                   88                                         
-88 `8b     d8' 88  ,adPPYYba,  88  8b,dPPYba,       88   ,adPPYba,    ,adPPYba,   8b,dPPYba,   
-88  `8b   d8'  88  ""     `Y8  88  88P'   `"8a      88  a8"     "8a  a8"     "8a  88P'    "8a  
-88   `8b d8'   88  ,adPPPPP88  88  88       88      88  8b       d8  8b       d8  88       d8  
-88    `888'    88  88,    ,88  88  88       88      88  "8a,   ,a8"  "8a,   ,a8"  88b,   ,a8"  
-88     `8'     88  `"8bbdP"Y8  88  88       88      88   `"YbbdP"'    `"YbbdP"'   88`YbbdP"'   
-                                                                                  88           
-                                                                                  88    
- */
 
 #define DEBUG_PIN 12
 
 unsigned long fake_intr = 0;
+unsigned long t_now, t_last;
 int pErg_sim = 0;
 
 void setup() {
@@ -174,25 +167,73 @@ void setup() {
   aver_score.spread = 5.0;
   aver_score.offset = 0.0;
 
-  fake_intr = millis(); + erg_sim[0];
+  stopwatch_reset();
+
+  t_last = millis();
+  fake_intr = t_last + erg_sim[0];
+}
+
+void stopwatch_reset(){
+  int c;
+
+  for(c=0;c<8;c++) {
+    stopwatch[c]='0';
+    stopwatch_disp[c]='9';
+  }
+  stopwatch_disp[4]='0'; // don't show tens and hours
+  stopwatch_disp[5]='0';
+  stopwatch[6]=':';
+}
+
+void stopwatch_inc(){
+  stopwatch[0]++;
 }
 
 
+                                                               
+//  #    #    ##    #  #    #      #        ####    ####   #####  
+//  ##  ##   #  #   #  ##   #      #       #    #  #    #  #    # 
+//  # ## #  #    #  #  # #  #      #       #    #  #    #  #    # 
+//  #    #  ######  #  #  # #      #       #    #  #    #  #####  
+//  #    #  #    #  #  #   ##      #       #    #  #    #  #      
+//  #    #  #    #  #  #    #      ######   ####    ####   #      
 
 int tic = 0;
 
 void loop(void) {
-  unsigned long t_real = millis();
+  unsigned long t_now = millis();
 
   process_interrupts();
 
-  // Stopped for > 5 seconds - assume stop rowing - measure from power - as stroke only ends on next pull
-  if (rowing) check_slow_down(t_real);
+  if ((t_now - t_last) >= 100) {
+    t_last += 100;
 
+    if (rowing) check_slow_down(t_now);
+
+    if (rowing) {
+      stopwatch_inc();
+
+      curr_stat.elapsed+=0.1;
+
+      // row_secs         +=0.1;
+      // if (row_secs >= 60) {
+      //   stats_disp[27]='X'; // make the display think that drawing a : is necessary - because it's different
+      //   row_secs-=60.0;
+      //   if (++row_minutes > 60) {
+      //     stats_disp[24]='X';
+      //     row_hours++;
+      //     row_minutes -= 60;
+      //     if (row_hours > 9)
+      //       row_hours = 0;
+      //   }
+      // }
+      // sprintf(stats_curr+17,"%05.0f", curr_stat.distance);
+    }
+  }
   delay(50); // avoid busy wait?!
 
   // If we're debugging - add some fake interrupts into the queue.
-  if ((DEBUG) && (t_real >= fake_intr)) {
+  if ((DEBUG) && (t_now >= fake_intr)) {
     push_interrupt(fake_intr);
     fake_intr += erg_sim[pErg_sim++];
     if (erg_sim[pErg_sim]==999999)
@@ -200,8 +241,15 @@ void loop(void) {
   }
 };
 
+//   #####                                       #  #######                 
+//  #     #  #####    ##    #####   #####       #   #        #    #  #####  
+//  #          #     #  #   #    #    #        #    #        ##   #  #    # 
+//   #####     #    #    #  #    #    #       #     #####    # #  #  #    # 
+//        #    #    ######  #####     #      #      #        #  # #  #    # 
+//  #     #    #    #    #  #   #     #     #       #        #   ##  #    # 
+//   #####     #    #    #  #    #    #    #        #######  #    #  ##### 
+
 void start_pull() {
-// ready force graph
   force_graph_ready();
 
   stroke_len = 0;
@@ -210,7 +258,8 @@ void start_pull() {
 };
 
 void end_pull(){
-// draw force analysis
+  update_stats(2);
+  stroke_analysis();
 };
 
 void record_force(int force) {
@@ -229,14 +278,6 @@ void record_force(int force) {
   if (stroke_len > 1) {
     if (force) {
       fg_dy[stroke_len-1] = (double)(fg_N[stroke_len-1]) - (double)(fg_N[stroke_len-2]+fg_N[stroke_len])/2.0;
-      // //  95 10 5  -> 10 - (95+5)/2 = -40  ->  10/-40 = -.25      
-      // dy = (double) fg_N[stroke_len -1] / dy;
-      // if (dy > +0.1){
-      //   fg_dy[stroke_len-1] = dy;
-      // }
-      // if (dy < -0.1) {
-      //   fg_dy[stroke_len-1] = dy;
-      // }
     }
     else fg_dy[stroke_len-1] = 0;
   }
@@ -245,6 +286,16 @@ void record_force(int force) {
   
   stroke_len++;
 }
+
+
+
+//   #####                                               #####                                  
+//  #     #  #####  #####    ####   #    #  ######      #     #   ####    ####   #####   ###### 
+//  #          #    #    #  #    #  #   #   #           #        #    #  #    #  #    #  #      
+//   #####     #    #    #  #    #  ####    #####        #####   #       #    #  #    #  #####  
+//        #    #    #####   #    #  #  #    #                 #  #       #    #  #####   #      
+//  #     #    #    #   #   #    #  #   #   #           #     #  #    #  #    #  #   #   #      
+//   #####     #    #    #   ####   #    #  ######       #####    ####    ####   #    #  ###### 
 
 void stroke_analysis(){
   int i,fx,fy,bx,by;
@@ -328,7 +379,6 @@ void stroke_analysis(){
   aver_score.offset = (aver_score.offset*9+curr_score.offset)/10;
 
   stroke_score_plot();
-
 }
 
 // https://www.messletters.com/en/big-text/  thick

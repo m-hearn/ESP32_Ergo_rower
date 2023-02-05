@@ -18,7 +18,8 @@ setup_display           setup                       setup_rower             setu
                                                     ready_rower
 
 loop(0)                 loop(1)                     
-  call draw*               call ->                  process_interrupts      send_ble
+  call drawX               call ->                  process_interrupts      send_ble
+  call send BLE
 
 force_graph             start_pull                  start_rower             check_ble
 powergraph              end_pull                    stop_rower
@@ -26,6 +27,8 @@ elements                record_force                calc_power_stroke
 stroke_score            stroke_analysis             check_slow_down*      
 
                         stop_watch?
+
+display calls send_BLE, from processor 0 and avoids time critical issues between drawing and BLE
 
 *not working
 

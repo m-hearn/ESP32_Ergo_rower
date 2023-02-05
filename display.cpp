@@ -1,17 +1,3 @@
-/* 
-                                                                        
-88888888ba,    88                          88                           
-88      `"8b   ""                          88                           
-88        `8b                              88                           
-88         88  88  ,adPPYba,  8b,dPPYba,   88  ,adPPYYba,  8b       d8  
-88         88  88  I8[    ""  88P'    "8a  88  ""     `Y8  `8b     d8'  
-88         8P  88   `"Y8ba,   88       d8  88  ,adPPPPP88   `8b   d8'   
-88      .a8P   88  aa    ]8I  88b,   ,a8"  88  88,    ,88    `8b,d8'    
-88888888Y"'    88  `"YbbdP"'  88`YbbdP"'   88  `"8bbdP"Y8      Y88'     
-                              88                               d8'      
-                              88                              d8'  
- */
-
 // http://www.barth-dev.de/online/rgb565-color-picker/  
 
 #include "SPI.h"
@@ -21,7 +7,8 @@
 char stats_curr[36];  // char "H:MI:SS SM m:ss 12345 A:5m WWW"
 char stats_disp[36];  //       123456789012345678901234567890
 
-#include "ble.h" // because timing in the wrong place
+#include "ble.h" // keep time critical stuff on processor 0
+
 int row_hours;
 int row_minutes;
 double row_secs;
@@ -38,8 +25,8 @@ double row_secs;
 
 
 #define X_SPLIT 10
-#define X_DIST 170
-#define Y_DIST 165
+#define X_DIST 175
+#define Y_DIST 17
 #define X_ASPLIT 210
 #define X_WATT 210
 #define Y_WATT 210
@@ -50,20 +37,53 @@ double row_secs;
 
 #define CALIBRATION_FILE "/TouchCalData"
 TaskHandle_t Display_t_handle;
-void core0_handler(void *param);
+void display_loop(void *param);
 
 TFT_eSPI tft = TFT_eSPI((int16_t) 240, (int16_t) 320);
+                              
+TFT_eSprite spr_chr = TFT_eSprite(&tft);
+TFT_eSprite spr_char = TFT_eSprite(&tft);
 
+int last_font;
+void char_draw(char ch, int fnt, int colour, int x, int y){
+  if(fnt==0) {
+    tft.setCursor(x, y);
+    tft.setTextColor(colour, TFT_BLACK); 
+    tft.setTextSize(2);
+    tft.print(ch);
+    return;
+  }
 
-                                                 
-// 88888b.   .d88b.  888  888  888  .d88b.  888d888 
-// 888 "88b d88""88b 888  888  888 d8P  Y8b 888P"   
-// 888  888 888  888 888  888  888 88888888 888     
-// 888 d88P Y88..88P Y88b 888 d88P Y8b.     888     
-// 88888P"   "Y88P"   "Y8888888P"   "Y8888  888     
-// 888                                              
-// 888                                              
-// 888    
+  switch(fnt) {
+    case 1:
+      spr_char.createSprite(35,35);
+      spr_char.setFreeFont(VERD18);
+      break;
+    case 2:
+      spr_char.createSprite(45,45);
+      spr_char.setFreeFont(VERD22);
+      break;
+    case 3:
+      spr_char.createSprite(70,75);
+      spr_char.setFreeFont(VERD36);
+  }
+  spr_char.fillSprite(TFT_ORANGE);
+  spr_char.drawRect(0,0,31,31,TFT_ORANGE);
+  spr_char.setTextColor(colour,TFT_BLACK);
+  if ((ch>='0')&&(ch<='9'))   spr_char.drawNumber(ch-'0', 0, 0);
+  else if (ch == ':')         spr_char.drawString(":", 0, 0);
+  spr_char.pushSprite(x, y,TFT_ORANGE);  
+  spr_char.deleteSprite();
+}
+
+                                                                                    
+//  #####    ####   #    #  ######  #####        ####   #####     ##    #####   #    # 
+//  #    #  #    #  #    #  #       #    #      #    #  #    #   #  #   #    #  #    # 
+//  #    #  #    #  #    #  #####   #    #      #       #    #  #    #  #    #  ###### 
+//  #####   #    #  # ## #  #       #####       #  ###  #####   ######  #####   #    # 
+//  #       #    #  ##  ##  #       #   #       #    #  #   #   #    #  #       #    # 
+//  #        ####   #    #  ######  #    #       ####   #    #  #    #  #       #    # 
+
 
 #define PG_Y 210
 #define PG_X 5
@@ -99,13 +119,6 @@ void powergraph_setup(){
   pg_sprite.setScrollRect(1,1,197,72); //,0);
 }
 
-void powergraph_draw(){
-  // if (powergraph.draw)
-  if (pg_dirty)
-    pg_sprite.pushSprite(PG_X,PG_Y);
-  pg_dirty = 0;
-}
-
 void powergraph_plot(double watts, double spm){
   int dw, ds;
 
@@ -136,17 +149,23 @@ void powergraph_scroll(){
   }
 }
 
-//  .d888                                    
-// d88P"                                     
-// 888                                       
-// 888888  .d88b.  888d888  .d8888b  .d88b.  
-// 888    d88""88b 888P"   d88P"    d8P  Y8b 
-// 888    888  888 888     888      88888888 
-// 888    Y88..88P 888     Y88b.    Y8b.     
-// 888     "Y88P"  888      "Y8888P  "Y8888  
+void powergraph_draw(){
+  // if (powergraph.draw)
+  if (pg_dirty)
+    pg_sprite.pushSprite(PG_X,PG_Y);
+  pg_dirty = 0;
+}
+
+                                                                                    
+//  ######   ####   #####    ####   ######       ####   #####     ##    #####   #    # 
+//  #       #    #  #    #  #    #  #           #    #  #    #   #  #   #    #  #    # 
+//  #####   #    #  #    #  #       #####       #       #    #  #    #  #    #  ###### 
+//  #       #    #  #####   #       #           #  ###  #####   ######  #####   #    # 
+//  #       #    #  #   #   #    #  #           #    #  #   #   #    #  #       #    # 
+//  #        ####   #    #   ####   ######       ####   #    #  #    #  #       #    # 
                                           
 
-#define X_TIME 10
+
 
 #define FG_X 50
 #define FG_Y 305
@@ -154,6 +173,13 @@ void powergraph_scroll(){
 #define FG_W 250
 #define force_graph_maxy 2400
 #define force_scale_y force_graph_maxy/FG_H
+
+
+//   480 total
+//   <space 60> | <graphx_min 17>  300 wide (-17)  |   260+17
+#define GRAPHX_MIN 17
+#define GRAPHX_MAX 243
+#define FG_X_SCALE 10
 
 // Force Graph
 
@@ -228,19 +254,7 @@ void forcegraph_setup() {
     for(s = 0; s< FORCE_STROKES; s++)
       fga[s][d]=FG_H;
 
-  ss_sprite.createSprite(100,88);
-  ss_sprite.setColorDepth(4);
-  ss_sprite.createPalette(fg_palette);
-  // ss_sprite.drawRect(0,0,99,79,9);
-  ss_sprite.pushSprite(219,288);
 };
-
-
-//   480 total
-//   <space 60> | <graphx_min 17>  300 wide (-17)  |   260+17
-#define GRAPHX_MIN 17
-#define GRAPHX_MAX 243
-#define FG_X_SCALE 10
 
 
 
@@ -258,50 +272,7 @@ void force_graph_ready(){
 
 };
 
-void stroke_score_plot(){
-  int i,fx,fy,bx,by;
 
-#define FG_BLOB 8
-
-  ss_sprite.fillRect(0,0,99,87,0);
-  ss_sprite.drawLine(49,0,49,87,9);
-  ss_sprite.drawLine(0,80-7*8,98,80-7*8,14);
-
-  fx = 46-(int)(last_score.spread*4)-(int)(last_score.offset*5);
-  fy = 80-(int)(last_score.f_eff*8);
-  bx = 54+(int)(last_score.spread*4)-(int)(last_score.offset*5);
-  by = 80-(int)(last_score.b_eff*8);
-  ss_sprite.fillRect(fx,fy,FG_BLOB,FG_BLOB,9);
-  ss_sprite.fillRect(bx,bx,FG_BLOB,FG_BLOB,9);
-  ss_sprite.drawLine(fx+4,fy+4,bx+4,by+4,6);
-
-  fx = 46-(int)(aver_score.spread*4)-(int)(aver_score.offset*5);
-  fy = 80-(int)(aver_score.f_eff*8);
-  bx = 54+(int)(aver_score.spread*4)-(int)(aver_score.offset*5);
-  by = 80-(int)(aver_score.b_eff*8);
-  ss_sprite.fillRect(fx,fy,FG_BLOB,FG_BLOB,(int)(10.4+(aver_score.f_eff/2)));
-  ss_sprite.fillRect(bx,bx,FG_BLOB,FG_BLOB,(int)(10.4+(aver_score.b_eff/2)));
-  ss_sprite.drawLine(fx+4,fy+4,bx+4,by+4,6);
-  
-  fx = 46-(int)(curr_score.spread*4)-(int)(curr_score.offset*5);
-  fy = 80-(int)(curr_score.f_eff*8);
-  bx = 54+(int)(curr_score.spread*4)-(int)(curr_score.offset*5);
-  by = 80-(int)(curr_score.b_eff*8);
-  ss_sprite.drawRect(fx,fy,FG_BLOB,FG_BLOB,(int)(10.4+(curr_score.f_eff/2)));
-  ss_sprite.drawRect(bx,by,FG_BLOB,FG_BLOB,(int)(10.4+(curr_score.b_eff/2)));
-  ss_sprite.drawRect((fx+bx)/2,(fy+by)/2,5,5,9);
-  ss_sprite.drawLine(fx+4,fy+4,bx+4,by+4,(int)(10.4+(curr_score.f_eff+curr_score.b_eff)/4));
-  
-  ss_dirty = 1;
-};
-
-void stroke_score_draw(){
-  if (ss_dirty) {
-    ss_sprite.pushSprite(219,288);
-    ss_dirty = 0;
-  }
-}
-  
 void force_graph_plot(int force){
   int force_y;
 
@@ -351,6 +322,122 @@ void force_graph_draw(){
   }
 };
 
+//   ####   #####  #####    ####   #    #  ######       ####    ####    ####   #####   ###### 
+//  #         #    #    #  #    #  #   #   #           #       #    #  #    #  #    #  #      
+//   ####     #    #    #  #    #  ####    #####        ####   #       #    #  #    #  #####  
+//       #    #    #####   #    #  #  #    #                #  #       #    #  #####   #      
+//  #    #    #    #   #   #    #  #   #   #           #    #  #    #  #    #  #   #   #      
+//   ####     #    #    #   ####   #    #  ######       ####    ####    ####   #    #  ###### 
+
+void stroke_score_setup(){
+  ss_sprite.createSprite(100,88);
+  ss_sprite.setColorDepth(4);
+  ss_sprite.createPalette(fg_palette);
+  ss_sprite.pushSprite(219,288);
+}
+
+void stroke_score_plot(){
+  int i,fx,fy,bx,by;
+
+#define FG_BLOB 8
+
+  ss_sprite.fillRect(0,0,99,87,0);
+  ss_sprite.drawLine(49,0,49,87,9);
+  ss_sprite.drawLine(0,80-7*8,98,80-7*8,14);
+
+  fx = 46-(int)(last_score.spread*4)-(int)(last_score.offset*5);
+  fy = 80-(int)(last_score.f_eff*8);
+  bx = 54+(int)(last_score.spread*4)-(int)(last_score.offset*5);
+  by = 80-(int)(last_score.b_eff*8);
+  ss_sprite.fillRect(fx,fy,FG_BLOB,FG_BLOB,9);
+  ss_sprite.fillRect(bx,bx,FG_BLOB,FG_BLOB,9);
+  ss_sprite.drawLine(fx+4,fy+4,bx+4,by+4,6);
+
+  fx = 46-(int)(aver_score.spread*4)-(int)(aver_score.offset*5);
+  fy = 80-(int)(aver_score.f_eff*8);
+  bx = 54+(int)(aver_score.spread*4)-(int)(aver_score.offset*5);
+  by = 80-(int)(aver_score.b_eff*8);
+  ss_sprite.fillRect(fx,fy,FG_BLOB,FG_BLOB,(int)(10.4+(aver_score.f_eff/2)));
+  ss_sprite.fillRect(bx,bx,FG_BLOB,FG_BLOB,(int)(10.4+(aver_score.b_eff/2)));
+  ss_sprite.drawLine(fx+4,fy+4,bx+4,by+4,6);
+  
+  fx = 46-(int)(curr_score.spread*4)-(int)(curr_score.offset*5);
+  fy = 80-(int)(curr_score.f_eff*8);
+  bx = 54+(int)(curr_score.spread*4)-(int)(curr_score.offset*5);
+  by = 80-(int)(curr_score.b_eff*8);
+  ss_sprite.drawRect(fx,fy,FG_BLOB,FG_BLOB,(int)(10.4+(curr_score.f_eff/2)));
+  ss_sprite.drawRect(bx,by,FG_BLOB,FG_BLOB,(int)(10.4+(curr_score.b_eff/2)));
+  ss_sprite.drawRect((fx+bx)/2,(fy+by)/2,5,5,9);
+  ss_sprite.drawLine(fx+4,fy+4,bx+4,by+4,(int)(10.4+(curr_score.f_eff+curr_score.b_eff)/4));
+  
+  ss_dirty = 1;
+};
+
+void stroke_score_draw(){
+  if (ss_dirty) {
+    ss_sprite.pushSprite(219,288);
+    ss_dirty = 0;
+  }
+}
+
+
+                                     
+//   ####   #####    ##    #####   ####  
+//  #         #     #  #     #    #      
+//   ####     #    #    #    #     ####  
+//       #    #    ######    #         # 
+//  #    #    #    #    #    #    #    # 
+//   ####     #    #    #    #     ####  
+
+#define X_TIME 5  // 160
+#define Y_TIME 9  // 54
+
+int stopwatch_chrs[][3] = {
+  { VERD22W*6-30,20, 0},  //mS
+  { VERD22W*5-33, 1, 2},  //S
+  { VERD22W*4-33, 1, 2},  //S
+  { VERD22W*2-16, 1, 2},  //M
+  { VERD22W*1-16, 1, 2},  //M
+  { 1           , 3, 0},  //H
+  { VERD22W*3-17, 0, 2}   //:
+  //{ VERD22W*2,    0, 2},  //:
+};
+
+void time_draw(){
+  int c;
+  for (c=0;c<7;c++) {
+    if (stopwatch[c]>stopwatch_max[c]){
+      stopwatch[c+1]++;
+      stopwatch[c]='0';
+    }
+    if (stopwatch[c]!=stopwatch_disp[c]){
+      stopwatch_disp[c] = stopwatch[c];
+      char_draw(stopwatch[c],stopwatch_chrs[c][2],TFT_WHITE,X_TIME+stopwatch_chrs[c][0],Y_TIME+stopwatch_chrs[c][1]);
+    }
+  }
+};
+
+int distance_chrs[][3] = {
+  { VERD18W*0, 0, 1},
+  { VERD18W*1, 0, 1},
+  { VERD18W*2, 0, 1},
+  { VERD18W*3, 0, 1},
+  { VERD18W*4, 0, 1}
+};
+char distance_disp[6];
+char distance_now[6];
+
+void distance_draw(){
+  int c;
+  for (c=0;c<5;c++) {
+    if (distance[c]!=stopwatch_disp[c]){
+      stopwatch_disp[c] = stopwatch[c];
+      char_draw(stopwatch[c],stopwatch_chrs[c][2],TFT_WHITE,X_TIME+stopwatch_chrs[c][0],Y_TIME+stopwatch_chrs[c][1]);
+    }
+  }
+
+}
+
 static int disp_loc[][4] = {
   { X_SM,        Y_SM,1,1},  //S
   { X_SM+VERD18W,Y_SM,1,1},  //M
@@ -374,53 +461,42 @@ static int disp_loc[][4] = {
   { X_DIST+VERD18W*2, Y_DIST, 1, 1},
   { X_DIST+VERD18W*3, Y_DIST, 1, 1},
   { X_DIST+VERD18W*4, Y_DIST, 1, 1},
-  { 0,0,0,0},
-  { X_TIME, 10, 1, 2},  //H
-  { X_TIME+VERD22W*2,    9, 1, 2},  //:
-  { X_TIME+VERD22W*3-16, 10, 1, 2},  //M
-  { X_TIME+VERD22W*4-16, 10, 1, 2},  //M
-  { X_TIME+VERD22W*5-17, 9, 1, 2},  //:
-  { X_TIME+VERD22W*6-32, 10, 1, 2},  //S
-  { X_TIME+VERD22W*7-32, 10, 1, 2},  //S
-  { 0,0,0,0},  //.
-  { X_TIME+VERD22W*8-32, 19, 1, 1},  //S
+  { 0,0,0,0}
 };
 
 // char "SM m:ss A:5m WWW 12345 H:MI:SS"
-//          888                                          888             
-//          888                                          888             
-//          888                                          888             
-//  .d88b.  888  .d88b.  88888b.d88b.   .d88b.  88888b.  888888 .d8888b  
-// d8P  Y8b 888 d8P  Y8b 888 "888 "88b d8P  Y8b 888 "88b 888    88K      
-// 88888888 888 88888888 888  888  888 88888888 888  888 888    "Y8888b. 
-// Y8b.     888 Y8b.     888  888  888 Y8b.     888  888 Y88b.       X88 
-//  "Y8888  888  "Y8888  888  888  888  "Y8888  888  888  "Y888  88888P' 
-                                                                      
-TFT_eSprite spr_chr = TFT_eSprite(&tft);
 
-void update_elements() {
+
+
+void update_stats() {
+
+  sprintf(distance_now, "%5.0f", curr_stat.distance);
     //       Time   str splt  dist aspl watts
   // char "SM m:ss A:5m WWW 12345 H:MI:SS"
   //       123456789012345678901234567890
 
   // supposed to update the respective display elements.
 
-  // sprintf(stats_curr,"%02d %01d:%02d %1d:%02d %3.0f %5.0f %1d:%02d:%04.1f"
+  // sprintf(stats_curr,"%02d %01d:%02d %1d:%02d %3.0f"
   //   , (int) curr_stat.spm
   //   , split_minutes,  split_secs
   //   , asplit_minutes, asplit_secs
   //   , curr_stat.watts // Watts
-  //   , curr_stat.distance
-  //   , row_hours, row_minutes, row_secs
+
   // );
 }
+
+
+
+
+
 
 
 void elements_draw(){
   int i; int c; int ch=0;
 
 
-  for (i=0, c=0; (i<= 32) && (c<4); i++) {
+  for (i=0, c=0; (i<= 21) && (c<4); i++) { //32 for time not 23
 
     if (stats_disp[i] != stats_curr[i]) {
       ch=stats_curr[i];
@@ -456,6 +532,12 @@ void elements_draw(){
   }
 }
 
+//   ####   ######  #####  #    #  #####       #####   #   ####   #####   #         ##    #   # 
+//  #       #         #    #    #  #    #      #    #  #  #       #    #  #        #  #    # #  
+//   ####   #####     #    #    #  #    #      #    #  #   ####   #    #  #       #    #    #   
+//       #  #         #    #    #  #####       #    #  #       #  #####   #       ######    #   
+//  #    #  #         #    #    #  #           #    #  #  #    #  #       #       #    #    #   
+//   ####   ######    #     ####   #           #####   #   ####   #       ######  #    #    #   
 
 void setup_display(){
   // int c;
@@ -471,8 +553,9 @@ void setup_display(){
  
   powergraph_setup();
   forcegraph_setup();
+  stroke_score_setup();
 
-  xTaskCreatePinnedToCore(core0_handler, "Display", 10000, NULL, 0, &Display_t_handle, DISPLAY_CPU);
+  xTaskCreatePinnedToCore(display_loop, "Display", 10000, NULL, 0, &Display_t_handle, DISPLAY_CPU);
 
   tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK); 
   tft.setTextSize(2);
@@ -486,91 +569,72 @@ void setup_display(){
   tft.printf("/500m");
   tft.setCursor(X_ASPLIT+10,120);
   tft.printf("Avg Splt");
-  tft.setCursor(X_DIST+133,Y_DIST+14);
+  tft.setCursor(X_DIST+130,Y_DIST+14);
   tft.print('m');
   tft.setCursor(X_WATT+90,Y_WATT + 13);
   tft.print('W');
 
 
-
+  sprintf(distance_disp,"     ");
 
   sprintf(stats_curr,"%2.0f %1d.%02.0f %1d.%02.0f %3.0f %5.0f %1d:%02d:%03.1f",
                        0.0,  9,   99.0,  9,   99.0,  0.0,  0.0,  0,  0,  0.0);
-  sprintf(stats_disp,"%2.0f %1d.%02.0f %1d.%02.0f %3.0f %5.0f %1d:%02d:%03.1f",0.0,9,99.0,9,99.0,0.0,0.0,0,0,0.0);
+  sprintf(stats_disp,"%2.0f %1d.%02.0f %1d.%02.0f %3.0f %5.0f %1d:%02d:%03.1f",8.8,8,88.8,8,88.8,8.8,8.8,8,8,8.8);
 
   tft.setTextColor(TFT_WHITE, TFT_BLACK); 
 };
 
 
 
-// 888                             888 888                  
-// 888                             888 888                  
-// 888                             888 888                  
-// 88888b.   8888b.  88888b.   .d88888 888  .d88b.  888d888 
-// 888 "88b     "88b 888 "88b d88" 888 888 d8P  Y8b 888P"   
-// 888  888 .d888888 888  888 888  888 888 88888888 888     
-// 888  888 888  888 888  888 Y88b 888 888 Y8b.     888     
-// 888  888 "Y888888 888  888  "Y88888 888  "Y8888  888   
+                                                                                           
+//  #####   #   ####   #####   #         ##    #   #           #        ####    ####   #####  
+//  #    #  #  #       #    #  #        #  #    # #            #       #    #  #    #  #    # 
+//  #    #  #   ####   #    #  #       #    #    #             #       #    #  #    #  #    # 
+//  #    #  #       #  #####   #       ######    #             #       #    #  #    #  #####  
+//  #    #  #  #    #  #       #       #    #    #             #       #    #  #    #  #      
+//  #####   #   ####   #       ######  #    #    #             ######   ####    ####   #    
 
-void core0_handler(void *param){
-  unsigned long t_real, t_last;
+void display_loop(void *param){
+  unsigned long t_now, t_last;
   int tic = 0;
 
   t_last = millis();
 
   while(true){
-    t_real = millis();
+    t_now = millis();
 
     // update these every cycle
+
     delay(5);
+    time_draw();
     elements_draw();
     force_graph_draw();
     stroke_score_draw();
     //touch_events();
 
-    if ((t_real - t_last) >= 0.1 Seconds) {
+    if ((t_now - t_last) >= 100) {
       t_last += 100;
-      if (++tic == 10) tic=0;
-    
-      if (rowing) {
-        curr_stat.elapsed+=0.1;
-
-        if (tic==0) {
+      if (++tic == 10) {
+        tic=0;
 #ifdef BLE
-          send_BLE();
+        send_BLE();
 #endif
-          powergraph_plot(curr_stat.watts, curr_stat.spm);
-          powergraph_scroll();
-          powergraph_draw();
-        }
-
-        row_secs         +=0.1;
-        if (row_secs >= 60) {
-          stats_disp[27]='X'; // make the display think that drawing a : is necessary - because it's different
-          row_secs-=60.0;
-          if (++row_minutes > 60) {
-            stats_disp[24]='X';
-            row_hours++;
-            row_minutes -= 60;
-            if (row_hours > 9)
-              row_hours = 0;
-          }
-        }
-        sprintf(stats_curr+17,"%5.0f %1d:%02d:%04.1f", curr_stat.distance, row_hours, row_minutes, row_secs);
+        powergraph_plot(curr_stat.watts, curr_stat.spm);
+        powergraph_scroll();
+        powergraph_draw();
       }
     }
-  }
+
+  } // while loop
 };
 
 
-//                   888 d8b 888                       888             
-//                   888 Y8P 888                       888             
-//                   888     888                       888             
-//  .d8888b  8888b.  888 888 88888b.  888d888  8888b.  888888  .d88b.  
-// d88P"        "88b 888 888 888 "88b 888P"       "88b 888    d8P  Y8b 
-// 888      .d888888 888 888 888  888 888     .d888888 888    88888888 
-// Y88b.    888  888 888 888 888 d88P 888     888  888 Y88b.  Y8b.     
-//  "Y8888P "Y888888 888 888 88888P"  888     "Y888888  "Y888  "Y8888  
+//   ####     ##    #       #  #####   #####     ##    #####  ###### 
+//  #    #   #  #   #       #  #    #  #    #   #  #     #    #      
+//  #       #    #  #       #  #####   #    #  #    #    #    #####  
+//  #       ######  #       #  #    #  #####   ######    #    #      
+//  #    #  #    #  #       #  #    #  #   #   #    #    #    #      
+//   ####   #    #  ######  #  #####   #    #  #    #    #    ###### 
 
 
 // void touch_calibrate()
