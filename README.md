@@ -48,3 +48,46 @@ and on to
 Rower side based on sketch WaterRino: https://github.com/adruino-io/waterrino
 Bluetooth side on sketch WaterRower S4BL3 Bluetooth BLE for S4: https://github.com/vibr77/wr_s4bl3_samd
 
+
+
+
+; PlatformIO Project Configuration File
+;
+;   Build options: build flags, source filter
+;   Upload options: custom upload port, speed and extra flags
+;   Library options: dependencies, extra library storages
+;   Advanced options: extra scripting
+;
+; Please visit documentation for the other options and examples
+; https://docs.platformio.org/page/projectconf.html
+
+[platformio]
+default_envs = release
+
+[env:release]
+platform = espressif32
+board = nodemcu-32s
+framework = arduino
+monitor_speed = 250000
+lib_deps = 
+	bodmer/TFT_eSPI@^2.3.84
+	;h2zero/NimBLE-Arduino@^1.4.1
+build_flags = 
+	;-DBLE=1
+	-DUSER_SETUP_LOADED=1
+	-DILI9488_DRIVER=1
+	-DTFT_BL=32
+	-DTFT_BACKLIGHT_ON=HIGH
+	-DTFT_MISO=19
+	-DTFT_MOSI=23
+	-DTFT_SCLK=18
+	-DTFT_RST=4
+	-DTFT_CS=15
+	-DTFT_DC=2
+	-DTOUCH_CS=21
+	-DLOAD_GLCD=1
+	-DLOAD_FONT2=1
+	-DLOAD_FONT4=1
+	-DLOAD_GFXFF=1
+	-DSMOOTH_FONT=1
+	-DSPI_FREQUENCY=60000000

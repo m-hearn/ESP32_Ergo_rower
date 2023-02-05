@@ -19,7 +19,7 @@ extern  int row_hours;
 extern  int row_minutes;
 extern  double row_secs;
 
-struct stats {
+struct stat {
 	int    stroke;
 	double elapsed;
 	int split_secs;
@@ -30,7 +30,7 @@ struct stats {
 	int pull;
 };
 
-extern struct stats curr_stat;
+extern struct stat stats;
 
 struct analysis {
 	double f_eff;

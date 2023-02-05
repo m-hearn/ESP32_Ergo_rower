@@ -8,10 +8,7 @@
 
 // local globals!
 int stroke;
-int split_minutes;
-int split_secs;
-int asplit_minutes;
-int asplit_secs;
+
 
 
 #ifndef ARDUINO
@@ -200,7 +197,7 @@ void setup_rower() {
   stroke = 0;
   
   calorie_tot = ZERO;
-  curr_stat.distance = ZERO;
+  stats.distance = ZERO;
 
   for (j = 0; j<MAX_N; j++) {	
     power_vector[j]= ZERO;
@@ -227,10 +224,6 @@ void setup_rower() {
 	
 	stroke_elapsed = ZERO;
 	power_elapsed = ZERO;
-
-  asplit_minutes = 9;  asplit_secs = 99;
-   split_minutes = 9;   split_secs = 99;
-
 
   force = ZERO;
 
@@ -383,7 +376,7 @@ void calc_rower_stroke(unsigned long t_intr) {
     if ((t_intr - t_stroke) < MIN_RETURN) {  // put back into decay, ended too soon.
       power_stroke_screen[0] = 0;
     } else {
-      curr_stat.pull = 1;
+      stats.pull = 1;
       //start clock1 = power timer
       t_power = t_intr;
 
@@ -398,7 +391,7 @@ void calc_rower_stroke(unsigned long t_intr) {
         cal_factor = RADSperTICK*pow((K_damp/magic_factor), 1.0/3.0); //distance per tick
       }
       stroke++;
-      curr_stat.stroke++;
+      stats.stroke++;
 
       start_pull();
     }
@@ -419,7 +412,7 @@ Y88b 888 Y8b.     Y88b.    888  888 Y88b 888
                                     "Y88P"  
   **********************************************************/
   if ((power_stroke_screen[0] ==0) && (power_stroke_screen[1] ==1)) {
-    curr_stat.pull = 0;
+    stats.pull = 0;
     tmp_elapsed = (t_intr - t_power) / 1000.0;
     // printf("X %f,%f,%ld\n", tmp_elapsed, power_elapsed, stroke);
     if ((tmp_elapsed > MIN_PULL) || (stroke == 0)) {  // stay in Power stroke for a while, avoid a false start/stop
@@ -433,21 +426,15 @@ Y88b 888 Y8b.     Y88b.    888  888 Y88b 888
 
       // omega_vector_avg_curr = omega_vector_avg/(stroke_elapsed+DELTA);
       // omega_vector_avg = 0.0;
-      stroke_distance = curr_stat.distance-stroke_distance_old;
-      stroke_distance_old = curr_stat.distance;
+      stroke_distance = stats.distance-stroke_distance_old;
+      stroke_distance_old = stats.distance;
       
       speed_vector[position2] = stroke_distance/(stroke_elapsed +DELTA);
 
       if (stroke > 2) {
-        curr_stat.split_secs = (int) 500.0/(weighted_avg(speed_vector, &position2) + DELTA);
-        curr_stat.asplit_secs = (int) 500.0*curr_stat.elapsed/curr_stat.distance;
-        
-        // format split -- should be done in display
-        split_minutes = curr_stat.split_secs/60;
-        split_secs   =  curr_stat.split_secs -split_minutes*60;
+        stats.split_secs = (int) 500.0/(weighted_avg(speed_vector, &position2) + DELTA);
+        stats.asplit_secs = (int) 500.0*stats.elapsed/stats.distance;
 
-        asplit_minutes = curr_stat.asplit_secs/60;
-        asplit_secs    = curr_stat.asplit_secs - asplit_minutes*60;
       }
       
       // power vs stroke time ratio
@@ -471,20 +458,10 @@ Y88b 888 Y8b.     Y88b.    888  888 Y88b 888
 
       // update row stats for graphics
 
-      curr_stat.watts = power_vector_avg;
-      curr_stat.spm   = 60.0/(stroke_vector_avg+DELTA);
+      stats.watts = power_vector_avg;
+      stats.spm   = 60.0/(stroke_vector_avg+DELTA);
 
       end_pull();
-
-
-      sprintf(stats_curr,"%02d %01d:%02d %1d:%02d %3.0f %05.0f"// %1d:%02d:%04.1f"
-          , (int) (60.0/stroke_vector_avg)
-          , split_minutes,  split_secs
-          , asplit_minutes, asplit_secs
-          , power_vector_avg // Watts
-          , curr_stat.distance
-          // , row_hours, row_minutes, row_secs
-      );
     }
   }
 
@@ -509,9 +486,9 @@ Y88b 888 Y8b.     Y88b.    888  888 Y88b 888
     // omega_vector_avg = omega_vector_avg + W_v[0]*current_dt;
   }
 
-  curr_stat.distance += cal_factor;
-  t_last_intr = t_intr;
-  last_dt = current_dt;
+  stats.distance += cal_factor;
+
+  printf("%d,",t_intr - t_last_intr);
 
   if (!DEBUG) 
     printf("%6ld,%4d,%4.3f,%d,%4.1f,% 6.1f,% 6.1f,%4.3f,%5.5f,%2.0f,%3.0f,%4.0f,%3.0f,%5.5f,%6ld,%5.5f,%5.5f,%5.5f\n"
@@ -522,14 +499,17 @@ Y88b 888 Y8b.     Y88b.    888  888 Y88b 888
       ,                                                K_damp //, K_damp_estimator);                  //
       ,                                                       stroke_vector_avg                       //
       ,                                                             power_vector_avg                  //
-      ,                                                                   curr_stat.distance          //
+      ,                                                                   stats.distance          //
       ,                                                                        force
       ,                                                                               stroke_elapsed,t_intr - t_power
       ,                                                                                          J_power,K_power
       ,                                                                                                      K_damp_estimator
     );
 
-    update_stats();
+  update_stats(1);
+    
+  t_last_intr = t_intr;
+  last_dt = current_dt;
 };
 
 //      888                                 
@@ -561,15 +541,15 @@ void check_slow_down(unsigned long t_real) {
 
   // speed_vector[position2] = stroke_distance/(new_elapsed +DELTA);
 
-  // curr_stat.split_secs = (int) 500.0/(weighted_avg(speed_vector, &position2) + DELTA);
-  // curr_stat.asplit_secs = (int) 500.0*curr_stat.elapsed/curr_stat.distance;
+  // stats.split_secs = (int) 500.0/(weighted_avg(speed_vector, &position2) + DELTA);
+  // stats.asplit_secs = (int) 500.0*stats.elapsed/stats.distance;
   
   // // format split -- should be done in display
-  // split_minutes = curr_stat.split_secs/60;
-  // split_secs   =  curr_stat.split_secs -split_minutes*60;
+  // split_minutes = stats.split_secs/60;
+  // split_secs   =  stats.split_secs -split_minutes*60;
 
-  // asplit_minutes = curr_stat.asplit_secs/60;
-  // asplit_secs    = curr_stat.asplit_secs - asplit_minutes*60;
+  // asplit_minutes = stats.asplit_secs/60;
+  // asplit_secs    = stats.asplit_secs - asplit_minutes*60;
   
   // // calc Watts
   // power_ratio_vector[position2] = power_elapsed/(new_elapsed + DELTA);
@@ -586,8 +566,8 @@ void check_slow_down(unsigned long t_real) {
   
   // // // update row stats for graphics
 
-  // // curr_stat.watts = power_vector_avg;
-  // curr_stat.spm   = 60.0/(stroke_vector_avg+DELTA);
+  // // stats.watts = power_vector_avg;
+  // stats.spm   = 60.0/(stroke_vector_avg+DELTA);
 }
 
 //                                        d8b          888            

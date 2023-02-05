@@ -24,16 +24,6 @@ double row_secs;
 #define VERD36W 55
 
 
-#define X_SPLIT 10
-#define X_DIST 175
-#define Y_DIST 17
-#define X_ASPLIT 210
-#define X_WATT 210
-#define Y_WATT 210
-#define X_SM 210
-#define Y_SM 255
-
-
 
 #define CALIBRATION_FILE "/TouchCalData"
 TaskHandle_t Display_t_handle;
@@ -167,7 +157,7 @@ void powergraph_draw(){
 
 
 
-#define FG_X 50
+#define FG_X 42
 #define FG_Y 305
 #define FG_H 160
 #define FG_W 250
@@ -189,6 +179,7 @@ static   double stroke_t = 0;
 volatile int    fg_stroke_draw;
 volatile int    fg_stroke_ind;
 int ss_dirty =0;
+int stats_dirty = 0;
 int fg_stroke;
 double fga[FORCE_STROKES][MAX_STROKE_LEN];
 
@@ -211,7 +202,7 @@ void forcegraph_setup() {
   tft.setTextColor(TFT_WHITE, TFT_BLACK); 
   tft.setTextSize(2);
 
-  tft.setCursor(18,360);
+  tft.setCursor(10,360);
   tft.printf("Kg");
 
   // force_scale_y = force_graph_maxy / (double) FG_H;
@@ -417,6 +408,9 @@ void time_draw(){
   }
 };
 
+#define X_DIST 175
+#define Y_DIST 17
+
 int distance_chrs[][3] = {
   { VERD18W*0, 0, 1},
   { VERD18W*1, 0, 1},
@@ -430,107 +424,92 @@ char distance_now[6];
 void distance_draw(){
   int c;
   for (c=0;c<5;c++) {
-    if (distance[c]!=stopwatch_disp[c]){
-      stopwatch_disp[c] = stopwatch[c];
-      char_draw(stopwatch[c],stopwatch_chrs[c][2],TFT_WHITE,X_TIME+stopwatch_chrs[c][0],Y_TIME+stopwatch_chrs[c][1]);
+    if (distance_now[c]!=distance_disp[c]){
+      distance_disp[c] = distance_now[c];
+      char_draw(distance_now[c],distance_chrs[c][2],TFT_YELLOW,X_DIST+distance_chrs[c][0],Y_DIST+distance_chrs[c][1]);
     }
   }
-
 }
+
+
+#define X_SPLIT 10
+#define X_ASPLIT 210
+#define Y_SPLITS 72
+
+#define X_WATT 210
+#define Y_WATT 210
+
+#define X_SM 210
+#define Y_SM 255
+
+
 
 static int disp_loc[][4] = {
   { X_SM,        Y_SM,1,1},  //S
   { X_SM+VERD18W,Y_SM,1,1},  //M
   { 0,0,0,0},
-  { X_SPLIT,75, 1,3}, //split m
-  { X_SPLIT+VERD36W-10,72, 1,3}, //:
-  { X_SPLIT+VERD36W*2-40,75, 1,3}, //s
-  { X_SPLIT+VERD36W*3-44,75, 1,3}, //s
+  { X_SPLIT             ,Y_SPLITS+3, 1,3}, //split m
+  { X_SPLIT+VERD36W-10  ,Y_SPLITS  , 1,3}, //:
+  { X_SPLIT+VERD36W*2-40,Y_SPLITS+3, 1,3}, //s
+  { X_SPLIT+VERD36W*3-44,Y_SPLITS+3, 1,3}, //s
   { 0,0,0,0},
-  { X_ASPLIT,75, 1, 2}, //Asplit m
-  { X_ASPLIT+VERD22W  -2,74, 1, 2}, //:
-  { X_ASPLIT+VERD22W*2-16,75, 1, 2}, //ss
-  { X_ASPLIT+VERD22W*3-16,75, 1, 2},
+  { X_ASPLIT             ,Y_SPLITS+3, 1, 2}, //Asplit m
+  { X_ASPLIT+VERD22W  -2 ,Y_SPLITS+2, 1, 2}, //:
+  { X_ASPLIT+VERD22W*2-16,Y_SPLITS+3, 1, 2}, //ss
+  { X_ASPLIT+VERD22W*3-16,Y_SPLITS+3, 1, 2},
   {0,0,0,0},
   {X_WATT,          Y_WATT,1, 1}, //WWW
   {X_WATT+VERD18W,  Y_WATT,1, 1},
-  {X_WATT+VERD18W*2,Y_WATT,1, 1},
-  {0,0,0,0},
-  { X_DIST,           Y_DIST, 1, 1}, //Distn
-  { X_DIST+VERD18W,   Y_DIST, 1, 1},
-  { X_DIST+VERD18W*2, Y_DIST, 1, 1},
-  { X_DIST+VERD18W*3, Y_DIST, 1, 1},
-  { X_DIST+VERD18W*4, Y_DIST, 1, 1},
-  { 0,0,0,0}
+  {X_WATT+VERD18W*2,Y_WATT,1, 1}
 };
-
-// char "SM m:ss A:5m WWW 12345 H:MI:SS"
-
-
-
-void update_stats() {
-
-  sprintf(distance_now, "%5.0f", curr_stat.distance);
-    //       Time   str splt  dist aspl watts
-  // char "SM m:ss A:5m WWW 12345 H:MI:SS"
-  //       123456789012345678901234567890
-
-  // supposed to update the respective display elements.
-
-  // sprintf(stats_curr,"%02d %01d:%02d %1d:%02d %3.0f"
-  //   , (int) curr_stat.spm
-  //   , split_minutes,  split_secs
-  //   , asplit_minutes, asplit_secs
-  //   , curr_stat.watts // Watts
-
-  // );
-}
-
-
-
-
-
-
 
 void elements_draw(){
   int i; int c; int ch=0;
 
+  if (stats_dirty==0) return;
+  
+  stats_dirty = 0;
 
-  for (i=0, c=0; (i<= 21) && (c<4); i++) { //32 for time not 23
+  distance_draw();
+
+  for (i=0, c=0; (i<= 16) && (c<4); i++) { //32 for time not 23
 
     if (stats_disp[i] != stats_curr[i]) {
       ch=stats_curr[i];
       stats_disp[i] = ch;
       c++;
-      if(disp_loc[i][2]>1) {
-        tft.setCursor(disp_loc[i][0], disp_loc[i][1]);
-        tft.setTextSize(disp_loc[i][2]);
-        tft.print(ch);
-      }
-      if(disp_loc[i][2]==1){
-        if       (disp_loc[i][3]==1) {
-          spr_chr.createSprite(35,35);
-          spr_chr.setFreeFont(VERD18);
-        }else if (disp_loc[i][3]==2) {
-          spr_chr.createSprite(45,45);
-          spr_chr.setFreeFont(VERD22);
-        }else if (disp_loc[i][3]==3) {
-          spr_chr.createSprite(70,75);
-          spr_chr.setFreeFont(VERD36);
-        }
-        // spr.createSprite(65,51);
-        // spr.setFreeFont(VERD22);
-        spr_chr.fillSprite(TFT_ORANGE);
-        spr_chr.drawRect(0,0,31,31,TFT_ORANGE);
-        spr_chr.setTextColor(TFT_WHITE,TFT_BLACK);
-        if ((ch>='0')&&(ch<='9'))   spr_chr.drawNumber(ch-'0', 0, 0);
-        else if (ch == ':')         spr_chr.drawString(":", 0, 0);
-        spr_chr.pushSprite(disp_loc[i][0], disp_loc[i][1],TFT_ORANGE);  
-        spr_chr.deleteSprite();
-      }
+      char_draw(ch, disp_loc[i][3], TFT_WHITE, disp_loc[i][0], disp_loc[i][1]);
     }
   }
 }
+
+void update_stats(int level) {
+  int split_minutes;
+  int split_secs;
+  int asplit_minutes;
+  int asplit_secs;
+
+  stats_dirty = 1;
+
+  if (level==2){
+    // format split
+    split_minutes = stats.split_secs/60;
+    split_secs   =  stats.split_secs -split_minutes*60;
+
+    asplit_minutes = stats.asplit_secs/60;
+    asplit_secs    = stats.asplit_secs - asplit_minutes*60;
+
+    sprintf(stats_curr,"%02d %01d:%02d %1d:%02d %3.0f"
+      , (int) stats.spm
+      , split_minutes,  split_secs
+      , asplit_minutes, asplit_secs
+      , stats.watts);
+  }
+  if (level==1)
+    sprintf(distance_now, "%5.0f", stats.distance);
+}
+
+
 
 //   ####   ######  #####  #    #  #####       #####   #   ####   #####   #         ##    #   # 
 //  #       #         #    #    #  #    #      #    #  #  #       #    #  #        #  #    # #  
@@ -576,10 +555,8 @@ void setup_display(){
 
 
   sprintf(distance_disp,"     ");
-
-  sprintf(stats_curr,"%2.0f %1d.%02.0f %1d.%02.0f %3.0f %5.0f %1d:%02d:%03.1f",
-                       0.0,  9,   99.0,  9,   99.0,  0.0,  0.0,  0,  0,  0.0);
-  sprintf(stats_disp,"%2.0f %1d.%02.0f %1d.%02.0f %3.0f %5.0f %1d:%02d:%03.1f",8.8,8,88.8,8,88.8,8.8,8.8,8,8,8.8);
+  sprintf(stats_curr,"%2.0f %1d.%02.0f %1d.%02.0f %3.0f",0.0,9,99.0,9,99.0,0.0);
+  sprintf(stats_disp,"%2.0f %1d.%02.0f %1d.%02.0f %3.0f",0.0,9,99.0,9,99.0,0.0);
 
   tft.setTextColor(TFT_WHITE, TFT_BLACK); 
 };
@@ -619,7 +596,7 @@ void display_loop(void *param){
 #ifdef BLE
         send_BLE();
 #endif
-        powergraph_plot(curr_stat.watts, curr_stat.spm);
+        powergraph_plot(stats.watts, stats.spm);
         powergraph_scroll();
         powergraph_draw();
       }

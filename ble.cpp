@@ -233,31 +233,31 @@ void setCxLightRowerData(){
   cRower[Value_size++]=rowerDataFlags & 0x000000FF;
   cRower[Value_size++]=(rowerDataFlags & 0x0000FF00) >> 8;
   
-  cRower[Value_size++] = (int8_t) (curr_stat.spm*2) & 0x000000FF;  // Bit 1 SPM is reported as 0.5 of this - allows integer to deliver 0.5 accuracy?!
-  cRower[Value_size++] =  curr_stat.stroke & 0x000000FF;
-  cRower[Value_size++] = (curr_stat.stroke & 0x0000FF00) >> 8;
+  cRower[Value_size++] = (int8_t) (stats.spm*2) & 0x000000FF;  // Bit 1 SPM is reported as 0.5 of this - allows integer to deliver 0.5 accuracy?!
+  cRower[Value_size++] =  stats.stroke & 0x000000FF;
+  cRower[Value_size++] = (stats.stroke & 0x0000FF00) >> 8;
   
-  // cRower[Value_size++] = curr_stat.spm & 0x000000FF;  // Bit 2 
-  dist = (int) (curr_stat.distance);
+  // cRower[Value_size++] = stats.spm & 0x000000FF;  // Bit 2 
+  dist = (int) (stats.distance);
 
   cRower[Value_size++] =  dist & 0x000000FF; // Bit 3
   cRower[Value_size++] = (dist & 0x0000FF00) >> 8;
   cRower[Value_size++] = (dist & 0x00FF0000) >> 16;
   
-  cRower[Value_size++] = curr_stat.split_secs & 0x000000FF; //4
-  cRower[Value_size++] = (curr_stat.split_secs & 0x0000FF00) >> 8;
+  cRower[Value_size++] = stats.split_secs & 0x000000FF; //4
+  cRower[Value_size++] = (stats.split_secs & 0x0000FF00) >> 8;
   
-  cRower[Value_size++] = curr_stat.asplit_secs & 0x000000FF; //5
-  cRower[Value_size++] = (curr_stat.asplit_secs & 0x0000FF00) >> 8;
+  cRower[Value_size++] = stats.asplit_secs & 0x000000FF; //5
+  cRower[Value_size++] = (stats.asplit_secs & 0x0000FF00) >> 8;
 
-  cRower[Value_size++] = curr_stat.watts & 0x000000FF; //6
-  cRower[Value_size++] = (curr_stat.watts & 0x0000FF00) >> 8;
+  cRower[Value_size++] = stats.watts & 0x000000FF; //6
+  cRower[Value_size++] = (stats.watts & 0x0000FF00) >> 8;
 
-  // cRower[Value_size++] = curr_stat.averagePower & 0x000000FF;
-  // cRower[Value_size++] = (curr_stat.averagePower & 0x0000FF00) >> 8;
+  // cRower[Value_size++] = stats.averagePower & 0x000000FF;
+  // cRower[Value_size++] = (stats.averagePower & 0x0000FF00) >> 8;
 
-  cRower[Value_size++] =  ((int) curr_stat.elapsed) & 0x000000FF;
-  cRower[Value_size++] = (((int) curr_stat.elapsed) & 0x0000FF00) >> 8;
+  cRower[Value_size++] =  ((int) stats.elapsed) & 0x000000FF;
+  cRower[Value_size++] = (((int) stats.elapsed) & 0x0000FF00) >> 8;
 
   pData_chr->setValue((uint8_t* )cRower, Value_size);
   pData_chr->notify();
@@ -419,31 +419,31 @@ void send_BLE() {
 //   cRower[0]=rowerDataFlagsP1 & 0x000000FF;
 //   cRower[1]=(rowerDataFlagsP1 & 0x0000FF00) >> 8;
   
-//   cRower[2] = (int8_t) curr_stat.spm & 0x000000FF;
+//   cRower[2] = (int8_t) stats.spm & 0x000000FF;
   
-//   cRower[3] =  curr_stat.stroke & 0x000000FF;
-//   cRower[4] = (curr_stat.stroke & 0x0000FF00) >> 8;
+//   cRower[3] =  stats.stroke & 0x000000FF;
+//   cRower[4] = (stats.stroke & 0x0000FF00) >> 8;
   
-//   cRower[5] = curr_stat.averageStokeRate & 0x000000FF;
+//   cRower[5] = stats.averageStokeRate & 0x000000FF;
   
-//   cRower[6] = curr_stat.totalDistance &  0x000000FF;
-//   cRower[7] = (curr_stat.totalDistance & 0x0000FF00) >> 8;
-//   cRower[8] = (curr_stat.totalDistance & 0x00FF0000) >> 16;
+//   cRower[6] = stats.totalDistance &  0x000000FF;
+//   cRower[7] = (stats.totalDistance & 0x0000FF00) >> 8;
+//   cRower[8] = (stats.totalDistance & 0x00FF0000) >> 16;
   
-//   cRower[9] = curr_stat.instantaneousPace & 0x000000FF;
-//   cRower[10] = (curr_stat.instantaneousPace & 0x0000FF00) >> 8;
+//   cRower[9] = stats.instantaneousPace & 0x000000FF;
+//   cRower[10] = (stats.instantaneousPace & 0x0000FF00) >> 8;
   
-//   cRower[11] = curr_stat.averagePace & 0x000000FF;
-//   cRower[12] = (curr_stat.averagePace & 0x0000FF00) >> 8;
+//   cRower[11] = stats.averagePace & 0x000000FF;
+//   cRower[12] = (stats.averagePace & 0x0000FF00) >> 8;
 
-//   cRower[13] = curr_stat.instantaneousPower & 0x000000FF;
-//   cRower[14] = (curr_stat.instantaneousPower & 0x0000FF00) >> 8;
+//   cRower[13] = stats.instantaneousPower & 0x000000FF;
+//   cRower[14] = (stats.instantaneousPower & 0x0000FF00) >> 8;
 
-//   cRower[15] = curr_stat.averagePower & 0x000000FF;
-//   cRower[16] = (curr_stat.averagePower & 0x0000FF00) >> 8;
+//   cRower[15] = stats.averagePower & 0x000000FF;
+//   cRower[16] = (stats.averagePower & 0x0000FF00) >> 8;
 
-//   cRower[17] = curr_stat.resistanceLevel & 0x000000FF;
-//   cRower[18] = (curr_stat.resistanceLevel & 0x0000FF00) >> 8;
+//   cRower[17] = stats.resistanceLevel & 0x000000FF;
+//   cRower[18] = (stats.resistanceLevel & 0x0000FF00) >> 8;
 
 //   pData_chr->setValue((uint8_t* )cRower, 19);
 //   pData_chr->notify();
@@ -452,24 +452,24 @@ void send_BLE() {
 //   cRower[0]= rowerDataFlagsP2 & 0x000000FF;
 //   cRower[1]=(rowerDataFlagsP2 & 0x0000FF00) >> 8;
          
-//   cRower[2] =  curr_stat.totalEnergy & 0x000000FF;
-//   cRower[3] = (curr_stat.totalEnergy & 0x0000FF00) >> 8;
+//   cRower[2] =  stats.totalEnergy & 0x000000FF;
+//   cRower[3] = (stats.totalEnergy & 0x0000FF00) >> 8;
 
-//   cRower[4] =  curr_stat.energyPerHour & 0x000000FF;
-//   cRower[5] = (curr_stat.energyPerHour & 0x0000FF00) >> 8;
+//   cRower[4] =  stats.energyPerHour & 0x000000FF;
+//   cRower[5] = (stats.energyPerHour & 0x0000FF00) >> 8;
 
-//   cRower[6] = curr_stat.energyPerMinute & 0x000000FF;
+//   cRower[6] = stats.energyPerMinute & 0x000000FF;
 
-//   cRower[7] = curr_stat.bpm & 0x000000FF;
+//   cRower[7] = stats.bpm & 0x000000FF;
 
-//   cRower[8] = curr_stat.metabolicEquivalent& 0x000000FF;
+//   cRower[8] = stats.metabolicEquivalent& 0x000000FF;
 
-//   //curr_stat.elapsedTime=curr_stat.elapsedTimeSec+curr_stat.elapsedTimeMin*60+curr_stat.elapsedTimeHour*3600;
-//   cRower[9] =   curr_stat.elapsedTime & 0x000000FF;
-//   cRower[10] = (curr_stat.elapsedTime & 0x0000FF00) >> 8;
+//   //stats.elapsedTime=stats.elapsedTimeSec+stats.elapsedTimeMin*60+stats.elapsedTimeHour*3600;
+//   cRower[9] =   stats.elapsedTime & 0x000000FF;
+//   cRower[10] = (stats.elapsedTime & 0x0000FF00) >> 8;
 
-//   cRower[11] =  curr_stat.remainingTime & 0x000000FF;
-//   cRower[12] = (curr_stat.remainingTime & 0x0000FF00) >> 8;
+//   cRower[11] =  stats.remainingTime & 0x000000FF;
+//   cRower[12] = (stats.remainingTime & 0x0000FF00) >> 8;
   
 //   pData_chr->setValue((uint8_t* )cRower, 13);
 //   pData_chr->notify();
@@ -484,21 +484,21 @@ void send_BLE() {
 //   if (deviceConnected) {        //** Send a value to protopie. The value is in txValue **//
 
 //     // long sec = 1000 * (millis() - start);
-//     // curr_stat.strokeRate = (int)round(spm + old_spm);
-//     // curr_stat.strokeCount = strokes;
-//     // curr_stat.averageStokeRate = (int)(strokes * 60 * 2 / sec);
-//     // curr_stat.totalDistance = meters;
-//     // curr_stat.instantaneousPace  = (int)round(500 / Ms); // pace for 500m
+//     // stats.strokeRate = (int)round(spm + old_spm);
+//     // stats.strokeCount = strokes;
+//     // stats.averageStokeRate = (int)(strokes * 60 * 2 / sec);
+//     // stats.totalDistance = meters;
+//     // stats.instantaneousPace  = (int)round(500 / Ms); // pace for 500m
 //     // float avrMs = meters / sec;
-//     // curr_stat.averagePace = (int)round(500 / avrMs);
-//     // curr_stat.instantaneousPower = (int)round(2.8 * Ms * Ms * Ms); //https://www.concept2.com/indoor-rowers/training/calculators/watts-calculator
-//     // curr_stat.averagePower = (int)round(2.8 * avrMs * avrMs * avrMs);
-//     // curr_stat.elapsedTime = sec;
+//     // stats.averagePace = (int)round(500 / avrMs);
+//     // stats.instantaneousPower = (int)round(2.8 * Ms * Ms * Ms); //https://www.concept2.com/indoor-rowers/training/calculators/watts-calculator
+//     // stats.averagePower = (int)round(2.8 * avrMs * avrMs * avrMs);
+//     // stats.elapsedTime = sec;
 
 //     // setCxRowerData();
 //     setCxLightRowerData();
 //     //delay(500); // bluetooth stack will go into congestion, if too many packets are sent
-//     // Serial.println("Send data " + String(curr_stat.strokeCount));
+//     // Serial.println("Send data " + String(stats.strokeCount));
 
 //     //Why coxswain need this notify for start???
 //     // char cRower[3];

@@ -13,7 +13,7 @@ void stop_rower();
 #include "globals.h"
 // global definitions
 
-struct stats curr_stat;
+struct stat stats;
 struct analysis curr_score, aver_score, last_score;
 
 int DEBUG = 0;
@@ -213,7 +213,7 @@ void loop(void) {
     if (rowing) {
       stopwatch_inc();
 
-      curr_stat.elapsed+=0.1;
+      stats.elapsed+=0.1;
 
       // row_secs         +=0.1;
       // if (row_secs >= 60) {
@@ -227,7 +227,7 @@ void loop(void) {
       //       row_hours = 0;
       //   }
       // }
-      // sprintf(stats_curr+17,"%05.0f", curr_stat.distance);
+      // sprintf(stats_curr+17,"%05.0f", stats.distance);
     }
   }
   delay(50); // avoid busy wait?!
@@ -250,6 +250,15 @@ void loop(void) {
 //   #####     #    #    #  #    #    #    #        #######  #    #  ##### 
 
 void start_pull() {
+  // Tuning params - debug  
+  int i;
+  printf("/*;");
+  for (i=0;i<MAX_STROKE_LEN;i++) printf("%d;",fg_N[i]);
+  printf("|;");
+  for (i=0;i<MAX_STROKE_LEN;i++) printf("%4.2f;",fg_dy[i]);
+  printf("|;");
+  printf("%3.1f;%3.1f;%3.1f;%3.1f; */\n",curr_score.f_eff,curr_score.b_eff,curr_score.spread,curr_score.offset);
+  
   force_graph_ready();
 
   stroke_len = 0;
