@@ -32,6 +32,12 @@ display calls send_BLE, from processor 0 and avoids time critical issues between
 
 *not working
 
+Stubs and includes to make it debug in Linux
+MAKEFILE - for debugging without Arduino / Graphics
+
+me:     _main.o  ergo.o  erg_debug.o
+        cc -o me _main.o ergo.o erg_debug.o -lm
+
 
 
 
@@ -65,12 +71,15 @@ Bluetooth side on sketch WaterRower S4BL3 Bluetooth BLE for S4: https://github.c
 default_envs = release
 
 [env:release]
-platform = espressif32
+platform = espressif32@3.5.0		; need to downgrade due to md5 library deprecation in the Web library requirements
 board = nodemcu-32s
 framework = arduino
 monitor_speed = 250000
 lib_deps = 
 	bodmer/TFT_eSPI@^2.3.84
+	ayushsharma82/AsyncElegantOTA@^2.2.7
+	me-no-dev/AsyncTCP@^1.1.1
+	me-no-dev/ESP Async WebServer@^1.2.3
 	;h2zero/NimBLE-Arduino@^1.4.1
 build_flags = 
 	;-DBLE=1

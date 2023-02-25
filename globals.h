@@ -1,4 +1,5 @@
 #ifndef GLOBALS
+#define BLE
 
 #define MAX_STROKE_LEN 25  // maximum number of ticks per stroke  - mine are about 5-6cm apart - so 1.3m total (missing a couple at the start and end)
 
@@ -19,7 +20,7 @@ extern  int row_hours;
 extern  int row_minutes;
 extern  double row_secs;
 
-struct stat {
+struct rowstat {
 	int    stroke;
 	double elapsed;
 	int split_secs;
@@ -30,7 +31,7 @@ struct stat {
 	int pull;
 };
 
-extern struct stat stats;
+extern struct rowstat stats;
 
 struct analysis {
 	double f_eff;

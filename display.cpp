@@ -3,6 +3,8 @@
 #include "SPI.h"
 #include "TFT_eSPI.h"
 
+#include "WiFi.h"
+
 #include "globals.h"
 char stats_curr[36];  // char "H:MI:SS SM m:ss 12345 A:5m WWW"
 char stats_disp[36];  //       123456789012345678901234567890
@@ -172,17 +174,14 @@ void powergraph_draw(){
 #define FG_X_SCALE 10
 
 // Force Graph
-
 #define FORCE_STROKES 10
 
-static   double stroke_t = 0;
 volatile int    fg_stroke_draw;
 volatile int    fg_stroke_ind;
 int ss_dirty =0;
 int stats_dirty = 0;
 int fg_stroke;
 double fga[FORCE_STROKES][MAX_STROKE_LEN];
-
 
 #define GRAPH_GRID TFT_DARKGREY  
 #define GRAPH_AXIS TFT_BLUE
@@ -280,7 +279,6 @@ void force_graph_plot(int force){
 void force_graph_draw(){
   int x1,y1,x2,y2;
   int d,s,ss;
-  int fg_histclr = 1;
 
   if(!rowing) return;
 
@@ -328,7 +326,7 @@ void stroke_score_setup(){
 }
 
 void stroke_score_plot(){
-  int i,fx,fy,bx,by;
+  int fx,fy,bx,by;
 
 #define FG_BLOB 8
 
@@ -499,7 +497,7 @@ void update_stats(int level) {
     asplit_minutes = stats.asplit_secs/60;
     asplit_secs    = stats.asplit_secs - asplit_minutes*60;
 
-    sprintf(stats_curr,"%02d %01d:%02d %1d:%02d %3.0f"
+    sprintf(stats_curr,"%02d %01d:%02d %1d:%02d %3d"
       , (int) stats.spm
       , split_minutes,  split_secs
       , asplit_minutes, asplit_secs
@@ -560,7 +558,6 @@ void setup_display(){
 
   tft.setTextColor(TFT_WHITE, TFT_BLACK); 
 };
-
 
 
                                                                                            

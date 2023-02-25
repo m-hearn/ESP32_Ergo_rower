@@ -1,3 +1,4 @@
+#define BLE
 #ifdef BLE
 #include "NimBLEDevice.h"
 
@@ -33,6 +34,8 @@ BLECharacteristic * pInf28_chr;
 BLECharacteristic * pInf29_chr;
 
 BLEAdvertising *pAdvertising;
+
+bool ble_enabled = false;
 
 bool deviceConnected = false;
 bool oldDeviceConnected = false;
@@ -148,13 +151,30 @@ void setup_BLE(){
   /** Add the services to the advertisment data **/
   pAdvertising->addServiceUUID(pDevInfService->getUUID());
   pAdvertising->addServiceUUID(pRowerService->getUUID());
-  //pAdvertising->addServiceUUID(pBattService->getUUID());
+  pAdvertising->addServiceUUID(pBattService->getUUID());
 
   pAdvertising->setScanResponse(true);
   pAdvertising->start();
+
+  ble_enabled = true;
+}
+
+void stop_BLE() {
+  ble_enabled = false;
+
+  delay(500);
+
+  pAdvertising->stop();
+  pServer->stopAdvertising();
+
+  delay(500);
+
+  NimBLEDevice::deinit(true);
 }
 
 void check_BLE() {
+  if (!ble_enabled) return;
+
   // connecting
   if (deviceConnected && !oldDeviceConnected) {
     // do stuff here on connecting
@@ -266,6 +286,8 @@ void setCxLightRowerData(){
 
 
 void send_BLE() {
+  if (!ble_enabled) return;
+
   if (deviceConnected) {        //** Send a value to protopie. The value is in txValue **//
     // setCxRowerData();
     setCxLightRowerData();

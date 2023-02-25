@@ -1,10 +1,46 @@
-
+#ifdef ARDUINO
 #include "SPI.h"
 #include "TFT_eSPI.h"
+#include "esp_timer.h"
+#else
+#include <stdio.h>
+#include <time.h>
+#include <cstdlib>
+#include <stdlib.h>
+#include <unistd.h>
+
+// technically 1000 - but we're speeding up time
+#define SPEEDUP 100
+#define delay(X) usleep(1000*X/SPEEDUP)
+
+unsigned long esp_timer_get_time()
+{
+    struct timespec now;
+    timespec_get(&now, TIME_UTC);
+    return (unsigned long) (now.tv_sec * 1000000 * SPEEDUP + (now.tv_nsec / 1000 * SPEEDUP));
+    // technically 1000  and 1000000 - but we're speeding up time!
+}
+
+void force_graph_ready() {
+  return;
+};
+void update_stats(int l){
+  return;
+}
+void force_graph_plot(int i) {
+  return;
+}
+void stroke_score_plot(){
+  return;
+}
+
+#endif
 
 #include "ble.h"
 #include "ergo.h"
 #include "display.h"
+
+extern void setup_ota();
 
 void setup_rower();
 void ready_rower();
@@ -13,7 +49,7 @@ void stop_rower();
 #include "globals.h"
 // global definitions
 
-struct stat stats;
+struct rowstat stats;
 struct analysis curr_score, aver_score, last_score;
 
 int DEBUG = 0;
@@ -45,20 +81,20 @@ Y8a     a8P    88,    "8a,   ,a8"  88          88,    ,88  "8a,   ,d88  "8b,   ,
                                                              "Y8bbdP" 
  */
 
-// #include "FS.h"
-// #include "SPIFFS.h"
+#include "FS.h"
+#include "SPIFFS.h"
 
-// void setup_storage(){
-//   // check file system exists
-//   if (!SPIFFS.begin()) {
-//     Serial.println("Formating file system");
-//     SPIFFS.format();
-//     SPIFFS.begin();
-//   }
+void setup_storage(){
+  // check file system exists
+  if (!SPIFFS.begin()) {
+    Serial.println("Formating file system");
+    SPIFFS.format();
+    SPIFFS.begin();
+  }
 
-//   Serial.println(SPIFFS.totalBytes());
-//   Serial.println(SPIFFS.usedBytes());
-// }
+  Serial.println(SPIFFS.totalBytes());
+  Serial.println(SPIFFS.usedBytes());
+}
 
 /*
 88b           d88                                                   
@@ -83,51 +119,37 @@ Y8a     a8P    88,    "8a,   ,a8"  88          88,    ,88  "8a,   ,d88  "8b,   ,
      88       88  88      88      88   `"Ybbd8"'  
                                                   
 */
-// #include <WiFi.h>
-// #include "time.h"
+#include "time.h"
 
-// // Replace with your network credentials
-// const char* ssid = "SPACE";
-// const char* password = "feedbac123";
+// NTP server to request epoch time
+const char* ntpServer = "pool.ntp.org";
+const long  gmtOffset_sec = 0;
+const int   daylightOffset_sec = 3600;
 
-// // NTP server to request epoch time
-// const char* ntpServer = "pool.ntp.org";
+// Variable to save current epoch time
+time_t epochTime;
+char dtime[12];
 
-// // Variable to save current epoch time
-// unsigned long epochTime;
-
-// // Function that gets current epoch time
-// unsigned long getTime() {
-//   time_t now;
-//   struct tm timeinfo;
-//   if (!getLocalTime(&timeinfo)) {
-//     //Serial.println("Failed to obtain time");
-//     return(0);
-//   }
-//   time(&now);
-//   return now;
-// }
-
-// void setup_time(void *param) {
-//   /* Init WiFi */
-//   WiFi.mode(WIFI_STA);
-//   WiFi.begin(ssid, password);
-//   Serial.print("Connecting to WiFi ..");
-//   while (WiFi.status() != WL_CONNECTED) {
-//     Serial.print('.');
-//     delay(1000);
-//   }
-//   Serial.println(WiFi.localIP());
-//   configTime(0, 0, ntpServer);
-//   epochTime = getTime();
-  
-//   //disconnect WiFi as it's no longer needed
-//   WiFi.disconnect(true);
-//   WiFi.mode(WIFI_OFF);
-// }
+// Function that gets current epoch time
+unsigned long getTime() {
+  time_t now;
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo)) {
+    printf("Failed to obtain time\n");
+    return(0);
+  }
+  time(&now);
+  strftime(dtime,11,"%y%m%d%H%M",&timeinfo);
+  return now;
+}
 
 
-
+void setup_time() {
+  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+  epochTime = getTime();
+  printf("%ld\n",epochTime);
+  printf("%s\n",dtime);
+}
 
 #define DEBUG_PIN 12
 
@@ -140,23 +162,36 @@ void setup() {
   
 #ifdef ARDUINO
   pinMode(DEBUG_PIN, INPUT_PULLUP);
-  DEBUG = !(digitalRead(DEBUG_PIN));
-#endif
+
 
   Serial.begin(250000);
   while (!Serial);
-  
-  if(!DEBUG)
-    Serial.printf("T,S#,St,dt,R,W,Wd,Wdd,C,damp,SPM,Watts,D,force\n");
+#endif
+
+  if (DEBUG==2) {
+    printf("T, S, Tic, dT,");
+    printf("WddScr, Wdd,Wd,W, ");
+    printf("Cal, Kdamp, KDE,");
+    printf("Sv,Se,St,");
+    printf("J, K, FN, W,");
+    printf("D\n");
+  }
   
   //setup_storage();
   
   // xTaskCreatePinnedToCore(setup_time, "time", 1000, NULL, 0, &Time_t_handle, DISPLAY_CPU);
 
+
+#ifdef ARDUINO
+  setup_display();
+  setup_ota();
+  setup_time();
+  setup_storage();
 #ifdef BLE
   setup_BLE();
 #endif
-  setup_display();
+  DEBUG = !(digitalRead(DEBUG_PIN));
+#endif
   setup_rower();
 
   // auto ready for rowing to begin
@@ -169,7 +204,7 @@ void setup() {
 
   stopwatch_reset();
 
-  t_last = millis();
+  t_last = esp_timer_get_time();
   fake_intr = t_last + erg_sim[0];
 }
 
@@ -190,6 +225,9 @@ void stopwatch_inc(){
 }
 
 
+void wifi_mode(){
+  stop_rower(); //turn off interrupts
+}
                                                                
 //  #    #    ##    #  #    #      #        ####    ####   #####  
 //  ##  ##   #  #   #  ##   #      #       #    #  #    #  #    # 
@@ -198,15 +236,18 @@ void stopwatch_inc(){
 //  #    #  #    #  #  #   ##      #       #    #  #    #  #      
 //  #    #  #    #  #  #    #      ######   ####    ####   #      
 
+
+
 int tic = 0;
+int ota_delay = 0;
 
 void loop(void) {
-  unsigned long t_now = millis();
+  unsigned long t_now = esp_timer_get_time();
 
   process_interrupts();
 
-  if ((t_now - t_last) >= 100) {
-    t_last += 100;
+  if ((t_now - t_last) >= 100000) {
+    t_last += 100000;
 
     if (rowing) check_slow_down(t_now);
 
@@ -214,32 +255,43 @@ void loop(void) {
       stopwatch_inc();
 
       stats.elapsed+=0.1;
-
-      // row_secs         +=0.1;
-      // if (row_secs >= 60) {
-      //   stats_disp[27]='X'; // make the display think that drawing a : is necessary - because it's different
-      //   row_secs-=60.0;
-      //   if (++row_minutes > 60) {
-      //     stats_disp[24]='X';
-      //     row_hours++;
-      //     row_minutes -= 60;
-      //     if (row_hours > 9)
-      //       row_hours = 0;
-      //   }
-      // }
-      // sprintf(stats_curr+17,"%05.0f", stats.distance);
     }
+// #ifdef ARDUINO
+//     else {
+//       ota_delay++;
+//       if (ota_delay > 100) 
+//         wifi_mode();
+//     }
+// #endif
   }
-  delay(50); // avoid busy wait?!
 
-  // If we're debugging - add some fake interrupts into the queue.
+  delay(5); // avoid busy wait?!
+
+    // If we're debugging - add some fake interrupts into the queue.
   if ((DEBUG) && (t_now >= fake_intr)) {
     push_interrupt(fake_intr);
-    fake_intr += erg_sim[pErg_sim++];
-    if (erg_sim[pErg_sim]==999999)
+    fake_intr += erg_sim[pErg_sim++] * 100;
+    if (erg_sim[pErg_sim]==999999) {
+#ifdef ARDUINO
       pErg_sim=0;
+#else
+      exit(0);
+#endif
+    }
   }
 };
+
+#ifndef ARDUINO
+int main(int ac, char**av){
+   DEBUG = ac - 1;
+
+  setup();
+
+  while(1) {
+    loop();
+  }
+}
+#endif
 
 //   #####                                       #  #######                 
 //  #     #  #####    ##    #####   #####       #   #        #    #  #####  
@@ -250,15 +302,18 @@ void loop(void) {
 //   #####     #    #    #  #    #    #    #        #######  #    #  ##### 
 
 void start_pull() {
-  // Tuning params - debug  
   int i;
-  printf("/*;");
-  for (i=0;i<MAX_STROKE_LEN;i++) printf("%d;",fg_N[i]);
-  printf("|;");
-  for (i=0;i<MAX_STROKE_LEN;i++) printf("%4.2f;",fg_dy[i]);
-  printf("|;");
-  printf("%3.1f;%3.1f;%3.1f;%3.1f; */\n",curr_score.f_eff,curr_score.b_eff,curr_score.spread,curr_score.offset);
-  
+
+  // Tuning params 
+  if (DEBUG==1) {
+    printf(" /*;");
+    for (i=0;i<MAX_STROKE_LEN;i++) printf("%d;",fg_N[i]);
+    printf("|;");
+    for (i=0;i<MAX_STROKE_LEN;i++) printf("%4.1f;",fg_dy[i]);
+    printf("|;");
+    printf("%3.1f;%3.1f;%3.1f;%3.1f; */\n",curr_score.f_eff,curr_score.b_eff,curr_score.spread,curr_score.offset);
+  }
+
   force_graph_ready();
 
   stroke_len = 0;
@@ -267,13 +322,19 @@ void start_pull() {
 };
 
 void end_pull(){
+   int i;
+   i = stroke_len;
+   while (i < MAX_STROKE_LEN) {
+      fg_N[i] = 0;
+      fg_dy[i-1] = 0;
+      i++;
+   }
   update_stats(2);
   stroke_analysis();
+  if ((DEBUG == 3) || (DEBUG == 0)) printf(" /* %d */\n",stats.stroke);
 };
 
 void record_force(int force) {
-  double dy;
-
   // check bounds
   if (stroke_len == MAX_STROKE_LEN) return;
   if (force < 0) force = 0;
@@ -307,7 +368,7 @@ void record_force(int force) {
 //   #####     #    #    #   ####   #    #  ######       #####    ####    ####   #    #  ###### 
 
 void stroke_analysis(){
-  int i,fx,fy,bx,by;
+  int i;
   // do the analysis here
   double stroke_mid = stroke_len / 2.0;
   double stdev = 0.0;  // somewhere between 14 and 20?  17.5 maybe good for smooth
@@ -349,18 +410,23 @@ void stroke_analysis(){
   }
   
   stdev = stdev / fg_N_cnt;
-  stdev -= 17; // max is about 26/27
-  if (stdev < 1) stdev = 1;  // range 1 to 10
-
-  f_eff = (1+effic_fp)/(1+effic_fn)   - 2;
-  b_eff = (1+effic_bp)/(1+effic_bn)*4 - 4;
+  stdev -= 15; // max is about 26/27
+  stdev *= 1.5;  // 21-15=6 *1.5 = 9 --  non linear might be better!?
   
-  if (f_eff>9.9) f_eff = 9.9;
-  if (b_eff>9.9) b_eff = 9.9;
-  if (f_eff<0.1) f_eff = 0.1;
-  if (b_eff<0.1) b_eff = 0.1;
+  f_eff = (1+effic_fp)/(1+effic_fn) -2.0;
+  b_eff = (1+effic_bp)/(1+effic_bn) -2.5;
 
   offset = mean - stroke_mid;  // -ve  front load +ve back load 
+
+
+  if (f_eff>9.99) f_eff = 9.99;
+  if (b_eff>9.99) b_eff = 9.99;
+  if (stdev>9.99) stdev = 9.99;
+  if (f_eff<0.1) f_eff = 0.1;
+  if (b_eff<0.1) b_eff = 0.1;
+  if (stdev<0.1) stdev = 0.1;  // range 1 to 10
+  
+  //11 - (offset * offset * 9) and min/max at 0,10
 
   // Tuning params - debug  
   // for (i=0;i<MAX_STROKE_LEN;i++) Serial.printf("%d,",fg_N[i]);
