@@ -1,12 +1,12 @@
 #ifndef GLOBALS
 #define BLE
 
-#define MAX_STROKE_LEN 25  // maximum number of ticks per stroke  - mine are about 5-6cm apart - so 1.3m total (missing a couple at the start and end)
+#define MAX_STROKE_LEN 30  // maximum number of ticks per stroke  - mine are about 5-6cm apart - so 1.3m total (missing a couple at the start and end)
 
 #define Seconds *1000.0
 
 // Erg sim
-extern int erg_sim[];
+extern const unsigned int erg_sim[];
 
 //  debugable display!        Time   str splt  dist aspl watts
 extern char stats_curr[36];  // char "H:MI:SS SM m:ss 12345 A:5m WWW"
@@ -50,7 +50,7 @@ extern  int rowing;
 
 #define GLOBALS
 
-extern void record_force(int force);
+extern void record_force(int force, double jerk_d);
 extern void start_pull();
 extern void end_pull();
 
