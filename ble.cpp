@@ -1,5 +1,3 @@
-#define BLE
-#ifdef BLE
 #include "NimBLEDevice.h"
 
 #include "globals.h"
@@ -296,7 +294,6 @@ void send_BLE() {
     check_BLE();
 }
 
-#endif
 
 // void getCxFitnessControlPoint(){
   

@@ -590,9 +590,7 @@ void display_loop(void *param){
       t_last += 100;
       if (++tic == 10) {
         tic=0;
-#ifdef BLE
         send_BLE();
-#endif
         powergraph_plot(stats.watts, stats.spm);
         powergraph_scroll();
         powergraph_draw();

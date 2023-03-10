@@ -87,9 +87,7 @@ void setup() {
   setup_display();
   setup_ota();
   setup_time();
-#ifdef BLE
   setup_BLE();  // must be AFTER wifi - otherwise it crashes
-#endif
   DEBUG = !(digitalRead(DEBUG_PIN));
 #endif
 
