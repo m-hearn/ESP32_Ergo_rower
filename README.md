@@ -75,14 +75,16 @@ platform = espressif32@3.5.0		; need to downgrade due to md5 library deprecation
 board = nodemcu-32s
 framework = arduino
 monitor_speed = 250000
+board_build.partitions = rower_ota.csv
+monitor_filters = esp32_exception_decoder
 lib_deps = 
 	bodmer/TFT_eSPI@^2.3.84
-	ayushsharma82/AsyncElegantOTA@^2.2.7
-	me-no-dev/AsyncTCP@^1.1.1
-	me-no-dev/ESP Async WebServer@^1.2.3
-	;h2zero/NimBLE-Arduino@^1.4.1
-build_flags = 
-	;-DBLE=1
+	ayushsharma82/AsyncElegantOTA
+	khoih-prog/ESP_WifiManager @ ^1.12.1
+	esphome/AsyncTCP-esphome
+	esphome/ESPAsyncWebServer-esphome
+	h2zero/NimBLE-Arduino@^1.4.1
+build_flags =
 	-DUSER_SETUP_LOADED=1
 	-DILI9488_DRIVER=1
 	-DTFT_BL=32
@@ -100,3 +102,6 @@ build_flags =
 	-DLOAD_GFXFF=1
 	-DSMOOTH_FONT=1
 	-DSPI_FREQUENCY=60000000
+
+
+	https://github.com/nithin-k-shine/Sending-sensor-data-from-ESP32-to-AWS-DynamoDB-cloud-storage

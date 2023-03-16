@@ -114,7 +114,7 @@ void powergraph_setup(){
 void powergraph_plot(double watts, double spm){
   int dw, ds;
 
-  dw = 72- (int) watts*72.0/440.0;
+  dw = 72- (int) watts*72.0/600.0;
   ds = 72- (int) (spm-15)*72.0/45.0;
   // watts
   if (dw > 2 && dw < 73) {
@@ -163,7 +163,7 @@ void powergraph_draw(){
 #define FG_Y 305
 #define FG_H 160
 #define FG_W 250
-#define force_graph_maxy 2400
+#define force_graph_maxy 1120
 #define force_scale_y force_graph_maxy/FG_H
 
 
@@ -198,11 +198,19 @@ void forcegraph_setup() {
   tft.drawLine(FG_X-1,FG_Y+FG_H+2,FG_X+FG_W,FG_Y+FG_H+2   ,GRAPH_AXIS);
   tft.drawLine(FG_X-1,FG_Y     +1,FG_X-1   ,FG_Y+FG_H     ,GRAPH_AXIS);
 
+  for (d=100;d<force_graph_maxy;d+=100) {
+    s=d/(force_scale_y);
+    tft.drawLine(FG_X-7,FG_Y+FG_H+1-s,FG_X-2   ,FG_Y+FG_H+1-s,TFT_CYAN);
+  }
+
   tft.setTextColor(TFT_WHITE, TFT_BLACK); 
   tft.setTextSize(2);
 
-  tft.setCursor(10,360);
-  tft.printf("Kg");
+  tft.setCursor(4,360);
+  // tft.printf("Kg");
+  tft.printf("K");
+  tft.setCursor(16,362);
+  tft.printf("g");
 
   // force_scale_y = force_graph_maxy / (double) FG_H;
 

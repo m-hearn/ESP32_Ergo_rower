@@ -302,7 +302,7 @@ return temp_sum;
 
 #define MIN_RETURN 880000
 #define MIN_PULL 0.400
-#define PULL_MIN 4.0
+#define PULL_MIN 6.0
 
 //  ######     ###    ##        ######      ######  ######## ########   #######  ##    ## ######## 
 // ##    ##   ## ##   ##       ##    ##    ##    ##    ##    ##     ## ##     ## ##   ##  ##       

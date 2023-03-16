@@ -172,7 +172,7 @@ void loop(void) {
   if ((DEBUG) && (t_now >= fake_intr)) {
     push_interrupt(fake_intr);
     fake_intr += erg_sim[pErg_sim++] * 10;
-    if (erg_sim[pErg_sim]==999999) {
+    if (erg_sim[pErg_sim]==__UINT16_MAX__) {
 #ifdef ARDUINO
       pErg_sim=0;
 #else
