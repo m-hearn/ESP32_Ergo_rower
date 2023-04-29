@@ -56,11 +56,22 @@ int row_buff_tail;
 
 static double  J_moment = 0.268; //kg*m^2 - set this to the moment of inertia of your flywheel. 
 static double K_damp; //related by J_moment*omega_dot = K_damp * omega^2 during non-power part of stroke
-#define K_DAMP_EST 0.0033/J_moment
-#define K_DAMP 0.0033
-
+#define K_DAMP_EST 0.0025/J_moment  //33 is about 13% high
+#define K_DAMP 0.0025
 //Used if dynamically working out damping factor
 //static double K_damp_estimator_vector_avg;
+
+// V02 = (Y * 1000) / Weight kg
+
+// Y is determined as follows:  2000m time
+//   	                                          Female 	                          Male
+//                                Weight <= 61.36kg 	Weight > 61.36kg 	      Weight <= 75kg 	            Weight > 75kg
+// Training Level: HIGH 	Y = 14.6 - (1.5 * Time) 	Y = 14.9 - (1.5 * Time) 	Y = 15.1 - (1.5 * Time) 	Y = 15.7 - (1.5 * Time)
+// Training Level: LOW 	              Y = 10.26 - (0.93 * Time) 	                      Y = 10.7 - (0.9 * Time)
+//   	Time is the pace converted to minutes.
+
+// 140 = 63.5  =  49 vo2 for 8 mins
+//  ((vo * 63.5 / 1000) -15.1)/1.5 = time in mins
 
 static double magic_factor = 2.8; //a heuristic constant people use to relate revs to distance-rowed
 
