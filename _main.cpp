@@ -1,3 +1,5 @@
+unsigned long t_last, fake_intr = 0;
+
 #ifdef ARDUINO
 #include "SPI.h"
 #include "TFT_eSPI.h"
@@ -8,12 +10,6 @@
 #include <cstdlib>
 #include <stdlib.h>
 #include <unistd.h>
-
-unsigned long fake_intr = 0;
-unsigned long t_now, t_last;
-int pErg_sim = 0;
-
-#define delay(X) usleep(1)
 
 unsigned long esp_timer_get_time()
 {
@@ -63,7 +59,6 @@ double fg_jd[MAX_STROKE_LEN];
 double fg_N_sum;
 double fg_N_cnt;
 
-unsigned long t_last, fake_intr;
 int pErg_sim = 0;
 
 char stopwatch[8]; // mssmihX
@@ -166,7 +161,9 @@ void loop(void) {
     }
   }
 
+#ifdef ARDUINO
   delay(5); // avoid busy wait?!
+#endif
 
     // If we're debugging - add some fake interrupts into the queue.
   if ((DEBUG) && (t_now >= fake_intr)) {
